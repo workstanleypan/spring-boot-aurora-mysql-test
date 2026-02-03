@@ -1,6 +1,9 @@
 # Build output
 target/
 
+# Archive (old/deprecated files)
+archive/
+
 # IDE
 .idea/
 *.iml
