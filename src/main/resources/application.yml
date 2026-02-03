@@ -1,0 +1,291 @@
+spring:
+  application:
+    name: spring-boot-mysql-test
+  
+  # Spring Cloud 配置
+  cloud:
+    # Nacos 服务发现配置
+    nacos:
+      discovery:
+        enabled: true
+        server-addr: localhost:8848
+        namespace: public
+        group: DEFAULT_GROUP
+        # 服务实例信息
+        service: ${spring.application.name}
+        ip: 127.0.0.1
+        port: ${server.port}
+        # 心跳配置
+        heart-beat-interval: 5000
+        heart-beat-timeout: 15000
+        # 元数据
+        metadata:
+          version: 1.0.0
+          env: dev
+    # 启用服务注册
+    service-registry:
+      auto-registration:
+        enabled: true
+  
+  # 数据源配置
+  datasource:
+    # 标准 MySQL JDBC URL
+    url: jdbc:mysql://localhost:3306/testdb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: admin
+    password: 570192Py
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    type: com.alibaba.druid.pool.DruidDataSource
+    
+    # Druid 连接池配置
+    druid:
+      # 初始化连接数
+      initial-size: 5
+      # 最小空闲连接数
+      min-idle: 5
+      # 最大活跃连接数
+      max-active: 20
+      # 获取连接等待超时时间
+      max-wait: 60000
+      # 配置间隔多久进行一次检测，检测需要关闭的空闲连接，单位是毫秒
+      time-between-eviction-runs-millis: 60000
+      # 配置一个连接在池中最小生存的时间，单位是毫秒
+      min-evictable-idle-time-millis: 300000
+      # 验证连接是否有效的SQL
+      validation-query: SELECT 1
+      # 建议配置为true，不影响性能，并且保证安全性
+      test-while-idle: true
+      # 申请连接时执行validationQuery检测连接是否有效
+      test-on-borrow: false
+      # 归还连接时执行validationQuery检测连接是否有效
+      test-on-return: false
+      # 是否缓存preparedStatement，也就是PSCache
+      pool-prepared-statements: true
+      # 配置监控统计拦截的filters，去掉后监控界面sql无法统计
+      filters: stat,wall,slf4j
+      # 打开PSCache，并且指定每个连接上PSCache的大小
+      max-pool-prepared-statement-per-connection-size: 20
+      # 通过connectProperties属性来打开mergeSql功能；慢SQL记录
+      connection-properties: druid.stat.mergeSql=true;druid.stat.slowSqlMillis=5000
+      # 合并多个DruidDataSource的监控数据
+      use-global-data-source-stat: true
+      
+      # Web监控配置
+      web-stat-filter:
+        enabled: true
+        url-pattern: /*
+        exclusions: "*.js,*.gif,*.jpg,*.png,*.css,*.ico,/druid/*"
+      
+      # StatViewServlet配置（监控页面）
+      stat-view-servlet:
+        enabled: true
+        url-pattern: /druid/*
+        reset-enable: false
+        login-username: admin
+        login-password: admin123
+
+  # JPA 配置（如果需要）
+  jpa:
+    show-sql: true
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        format_sql: true
+
+# 日志配置 (使用 Log4j2，配置在 log4j2-spring.xml)
+# 这里的配置会被 Log4j2 配置文件覆盖
+logging:
+  config: classpath:log4j2-spring.xml
+
+# Actuator 配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+# 服务器配置
+server:
+  port: 8080
+
+---
+# AWS Wrapper 配置（可选）
+spring:
+  config:
+    activate:
+      on-profile: aws-wrapper
+  datasource:
+    url: jdbc:aws-wrapper:mysql://localhost:3306/testdb?wrapperPlugins=bg,failover2,efm2&wrapperLoggerLevel=${WRAPPER_LOG_LEVEL:FINE}
+    driver-class-name: software.amazon.jdbc.Driver
+    type: com.alibaba.druid.pool.DruidDataSource
+    druid:
+      # 明确指定数据库类型（AWS Wrapper 无法自动检测）
+      db-type: mysql
+      # 移除 wall 过滤器（与 AWS Wrapper 不兼容）
+      filters: stat,slf4j
+
+---
+# AWS Wrapper with BG Plugin 配置（用于查看 BG Plugin 日志）
+spring:
+  config:
+    activate:
+      on-profile: aws-wrapper-bg
+  datasource:
+    url: jdbc:aws-wrapper:mysql://localhost:3306/testdb?wrapperPlugins=bg,failover2,efm2&wrapperLoggerLevel=FINE
+    driver-class-name: software.amazon.jdbc.Driver
+    type: com.alibaba.druid.pool.DruidDataSource
+    druid:
+      # 明确指定数据库类型（AWS Wrapper 无法自动检测）
+      db-type: mysql
+      # 移除 wall 过滤器（与 AWS Wrapper 不兼容）
+      filters: stat,slf4j
+
+---
+# Aurora MySQL 生产环境配置（使用 AWS Wrapper + BG Plugin）
+spring:
+  config:
+    activate:
+      on-profile: aurora-prod
+  datasource:
+    # 使用 Aurora 集群端点（必须使用 cluster endpoint 才能启用 BG Plugin）
+    # 格式: jdbc:aws-wrapper:mysql://<cluster-endpoint>:3306/<database>
+    # 支持自定义 JDBC 参数：通过 JDBC_PARAMS 环境变量
+    # 示例: export JDBC_PARAMS="sslMode=DISABLED&characterEncoding=UTF8&rewriteBatchedStatements=true&allowMultiQueries=true"
+    # bgdId: 用于区分不同的蓝绿部署，多集群时必须设置不同的值
+    url: jdbc:aws-wrapper:mysql://${AURORA_CLUSTER_ENDPOINT:database-1.cluster-xxxxx.us-east-1.rds.amazonaws.com}:3306/${AURORA_DATABASE:testdb}?${JDBC_PARAMS:}wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=${WRAPPER_LOG_LEVEL:INFO}&bgdId=${BGD_ID:cluster-a}
+    username: ${AURORA_USERNAME:admin}
+    password: ${AURORA_PASSWORD}
+    driver-class-name: software.amazon.jdbc.Driver
+    type: com.alibaba.druid.pool.DruidDataSource
+    druid:
+      db-type: mysql
+      filters: stat,slf4j
+      # Aurora 优化的连接池配置
+      initial-size: 10
+      min-idle: 10
+      max-active: 50
+      max-wait: 60000
+      # Aurora 连接验证
+      validation-query: SELECT 1
+      test-while-idle: true
+      test-on-borrow: false
+      test-on-return: false
+      time-between-eviction-runs-millis: 60000
+      min-evictable-idle-time-millis: 300000
+
+---
+# Aurora MySQL 开发环境配置（详细日志）
+spring:
+  config:
+    activate:
+      on-profile: aurora-dev
+  datasource:
+    # 支持自定义 JDBC 参数
+    # bgdId: 用于区分不同的蓝绿部署
+    url: jdbc:aws-wrapper:mysql://${AURORA_CLUSTER_ENDPOINT:database-1.cluster-xxxxx.us-east-1.rds.amazonaws.com}:3306/${AURORA_DATABASE:testdb}?${JDBC_PARAMS:}wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=FINE&bgdId=${BGD_ID:cluster-a}
+    username: ${AURORA_USERNAME:admin}
+    password: ${AURORA_PASSWORD}
+    driver-class-name: software.amazon.jdbc.Driver
+    type: com.alibaba.druid.pool.DruidDataSource
+    druid:
+      db-type: mysql
+      filters: stat,slf4j
+      initial-size: 5
+      min-idle: 5
+      max-active: 20
+
+---
+# RDS MySQL 生产环境配置（使用 AWS Wrapper + BG Plugin）
+spring:
+  config:
+    activate:
+      on-profile: rds-prod
+  datasource:
+    # RDS MySQL 支持 Blue/Green 部署
+    # 使用实例端点或读写端点
+    # 支持自定义 JDBC 参数：通过 JDBC_PARAMS 环境变量
+    # bgdId: 用于区分不同的蓝绿部署，多集群时必须设置不同的值
+    url: jdbc:aws-wrapper:mysql://${RDS_ENDPOINT:database-1.xxxxx.us-east-1.rds.amazonaws.com}:3306/${RDS_DATABASE:testdb}?${JDBC_PARAMS:}wrapperPlugins=auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=${WRAPPER_LOG_LEVEL:INFO}&bgdId=${BGD_ID:rds-cluster}
+    username: ${RDS_USERNAME:admin}
+    password: ${RDS_PASSWORD}
+    driver-class-name: software.amazon.jdbc.Driver
+    type: com.alibaba.druid.pool.DruidDataSource
+    druid:
+      db-type: mysql
+      filters: stat,slf4j
+      # RDS 优化的连接池配置
+      initial-size: 10
+      min-idle: 10
+      max-active: 50
+      max-wait: 60000
+      # RDS 连接验证
+      validation-query: SELECT 1
+      test-while-idle: true
+      test-on-borrow: false
+      test-on-return: false
+      time-between-eviction-runs-millis: 60000
+      min-evictable-idle-time-millis: 300000
+
+---
+# RDS MySQL 开发环境配置（详细日志）
+spring:
+  config:
+    activate:
+      on-profile: rds-dev
+  datasource:
+    # 支持自定义 JDBC 参数
+    # bgdId: 用于区分不同的蓝绿部署
+    url: jdbc:aws-wrapper:mysql://${RDS_ENDPOINT:database-1.xxxxx.us-east-1.rds.amazonaws.com}:3306/${RDS_DATABASE:testdb}?${JDBC_PARAMS:}wrapperPlugins=auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=FINE&bgdId=${BGD_ID:rds-cluster}
+    username: ${RDS_USERNAME:admin}
+    password: ${RDS_PASSWORD}
+    driver-class-name: software.amazon.jdbc.Driver
+    type: com.alibaba.druid.pool.DruidDataSource
+    druid:
+      db-type: mysql
+      filters: stat,slf4j
+      initial-size: 5
+      min-idle: 5
+      max-active: 20
+
+---
+# RDS MySQL 标准配置（不使用 AWS Wrapper）
+spring:
+  config:
+    activate:
+      on-profile: rds-standard
+  datasource:
+    # 标准 MySQL JDBC URL
+    url: jdbc:mysql://${RDS_ENDPOINT:database-1.xxxxx.us-east-1.rds.amazonaws.com}:3306/${RDS_DATABASE:testdb}?useSSL=true&requireSSL=true&serverTimezone=UTC
+    username: ${RDS_USERNAME:admin}
+    password: ${RDS_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    type: com.alibaba.druid.pool.DruidDataSource
+    druid:
+      initial-size: 10
+      min-idle: 10
+      max-active: 50
+      max-wait: 60000
+      validation-query: SELECT 1
+      test-while-idle: true
+      test-on-borrow: false
+      test-on-return: false
+      time-between-eviction-runs-millis: 60000
+      min-evictable-idle-time-millis: 300000
+      filters: stat,wall,slf4j
+
+---
+# 禁用 Nacos 配置（用于本地测试）
+spring:
+  config:
+    activate:
+      on-profile: no-nacos
+  cloud:
+    nacos:
+      discovery:
+        enabled: false
+    service-registry:
+      auto-registration:
+        enabled: false

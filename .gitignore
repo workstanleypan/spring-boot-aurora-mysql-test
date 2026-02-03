@@ -1,0 +1,35 @@
+# Build output
+target/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+
+# Logs
+logs/
+*.log
+
+# Environment files (contain sensitive data)
+.env
+.env.*
+!.env.template
+!.env.rds.template
+
+# Backup files
+*.bak
+*.backup*
+*copy*
+*.orig
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Maven
+.mvn/
+mvnw
+mvnw.cmd
