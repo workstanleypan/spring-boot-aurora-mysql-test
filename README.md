@@ -4,7 +4,7 @@ Spring Boot 应用，用于测试 AWS JDBC Wrapper 连接 Aurora MySQL，支持 
 
 ## 功能特性
 
-- ✅ AWS Advanced JDBC Wrapper 2.6.8
+- ✅ AWS Advanced JDBC Wrapper 3.1.0
 - ✅ Blue/Green Deployment Plugin
 - ✅ Failover & EFM Plugin
 - ✅ Druid 连接池
@@ -69,7 +69,7 @@ curl http://localhost:8080/api/bluegreen/status
 ## 技术栈
 
 - Spring Boot 2.6.8
-- AWS Advanced JDBC Wrapper 2.6.8
+- AWS Advanced JDBC Wrapper 3.1.0
 - Druid 1.2.16
 - MySQL Connector/J 8.0.33
 - Log4j2

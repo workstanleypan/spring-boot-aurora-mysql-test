@@ -107,11 +107,11 @@
             <version>8.0.33</version>
         </dependency>
 
-        <!-- AWS Advanced JDBC Wrapper (Optional) -->
+        <!-- AWS Advanced JDBC Wrapper -->
         <dependency>
             <groupId>software.amazon.jdbc</groupId>
             <artifactId>aws-advanced-jdbc-wrapper</artifactId>
-            <version>2.6.8</version>
+            <version>3.1.0</version>
         </dependency>
 
         <!-- Spring Boot Actuator (for health checks, exclude Logback) -->
