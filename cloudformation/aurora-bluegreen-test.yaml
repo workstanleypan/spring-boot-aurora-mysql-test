@@ -41,13 +41,14 @@ Parameters:
 
   TargetEngineVersion:
     Type: String
-    Default: '8.0.mysql_aurora.3.10.0'
-    Description: Aurora MySQL engine version for Green cluster (upgrade target)
+    Default: '8.0.mysql_aurora.3.10.3'
+    Description: Aurora MySQL engine version for Green cluster (LTS upgrade target)
     AllowedValues:
       - '8.0.mysql_aurora.3.10.0'
       - '8.0.mysql_aurora.3.10.1'
-      - ''
-    ConstraintDescription: Leave empty to use same version as Blue cluster
+      - '8.0.mysql_aurora.3.10.2'
+      - '8.0.mysql_aurora.3.10.3'
+    ConstraintDescription: 3.10.x LTS versions
 
   InstanceClass:
     Type: String
