@@ -55,13 +55,6 @@
             <AppenderRef ref="WrapperFile"/>
             <AppenderRef ref="RollingFile"/>
         </Logger>
-        
-        <!-- software.amazon 包也需要配置 -->
-        <Logger name="software.amazon" level="DEBUG" additivity="false">
-            <AppenderRef ref="Console"/>
-            <AppenderRef ref="WrapperFile"/>
-            <AppenderRef ref="RollingFile"/>
-        </Logger>
 
         <!-- HikariCP -->
         <Logger name="com.zaxxer.hikari" level="INFO" additivity="false">
