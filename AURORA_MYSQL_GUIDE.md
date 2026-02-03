@@ -109,16 +109,18 @@ tail -f logs/spring-boot.log
 tail -f logs/jdbc-wrapper.log
 ```
 
-## 连接池配置 (Druid)
+## 连接池配置 (HikariCP)
 
 ```yaml
-druid:
-  initial-size: 10
-  min-idle: 10
-  max-active: 50
-  max-wait: 60000
-  validation-query: SELECT 1
-  test-while-idle: true
+hikari:
+  pool-name: AuroraHikariPool
+  minimum-idle: 10
+  maximum-pool-size: 50
+  idle-timeout: 300000
+  max-lifetime: 600000
+  connection-timeout: 30000
+  validation-timeout: 5000
+  connection-test-query: SELECT 1
 ```
 
 ## 常见问题

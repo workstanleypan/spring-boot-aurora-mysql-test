@@ -2,57 +2,31 @@ spring:
   application:
     name: spring-boot-aurora-mysql-test
   
-  # 默认禁用 Nacos（Aurora 测试不需要）
-  cloud:
-    nacos:
-      discovery:
-        enabled: false
-    service-registry:
-      auto-registration:
-        enabled: false
-  
-  # 默认数据源配置 - Aurora MySQL
+  # 默认数据源配置 - Aurora MySQL with HikariCP
   datasource:
     url: jdbc:aws-wrapper:mysql://${AURORA_CLUSTER_ENDPOINT}:3306/${AURORA_DATABASE:testdb}?wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=${WRAPPER_LOG_LEVEL:INFO}&bgdId=${BGD_ID:cluster-a}
     username: ${AURORA_USERNAME:admin}
     password: ${AURORA_PASSWORD}
     driver-class-name: software.amazon.jdbc.Driver
-    type: com.alibaba.druid.pool.DruidDataSource
     
-    # Druid 连接池配置
-    druid:
-      db-type: mysql
-      initial-size: 10
-      min-idle: 10
-      max-active: 50
-      max-wait: 60000
-      time-between-eviction-runs-millis: 60000
-      min-evictable-idle-time-millis: 300000
-      validation-query: SELECT 1
-      test-while-idle: true
-      test-on-borrow: false
-      test-on-return: false
-      pool-prepared-statements: true
-      filters: stat,slf4j
-      max-pool-prepared-statement-per-connection-size: 20
-      connection-properties: druid.stat.mergeSql=true;druid.stat.slowSqlMillis=5000
-      use-global-data-source-stat: true
-      
-      # Druid 监控页面
-      stat-view-servlet:
-        enabled: true
-        url-pattern: /druid/*
-        reset-enable: false
-        login-username: admin
-        login-password: admin123
-      web-stat-filter:
-        enabled: true
-        url-pattern: /*
-        exclusions: "*.js,*.gif,*.jpg,*.png,*.css,*.ico,/druid/*"
+    # HikariCP 连接池配置
+    hikari:
+      pool-name: AuroraHikariPool
+      minimum-idle: 10
+      maximum-pool-size: 50
+      idle-timeout: 300000
+      max-lifetime: 600000
+      connection-timeout: 30000
+      validation-timeout: 5000
+      connection-test-query: SELECT 1
 
 # 日志配置
 logging:
-  config: classpath:log4j2-spring.xml
+  level:
+    root: INFO
+    com.test: DEBUG
+    software.amazon.jdbc: ${WRAPPER_LOG_LEVEL:INFO}
+    com.zaxxer.hikari: INFO
 
 # Actuator 配置
 management:
@@ -76,9 +50,6 @@ spring:
       on-profile: aurora-prod
   datasource:
     url: jdbc:aws-wrapper:mysql://${AURORA_CLUSTER_ENDPOINT}:3306/${AURORA_DATABASE:testdb}?${JDBC_PARAMS:}wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=${WRAPPER_LOG_LEVEL:INFO}&bgdId=${BGD_ID:cluster-a}
-    username: ${AURORA_USERNAME:admin}
-    password: ${AURORA_PASSWORD}
-    driver-class-name: software.amazon.jdbc.Driver
 
 ---
 # Aurora MySQL 开发环境（详细日志）
@@ -88,13 +59,13 @@ spring:
       on-profile: aurora-dev
   datasource:
     url: jdbc:aws-wrapper:mysql://${AURORA_CLUSTER_ENDPOINT}:3306/${AURORA_DATABASE:testdb}?${JDBC_PARAMS:}wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=FINE&bgdId=${BGD_ID:cluster-a}
-    username: ${AURORA_USERNAME:admin}
-    password: ${AURORA_PASSWORD}
-    driver-class-name: software.amazon.jdbc.Driver
-    druid:
-      initial-size: 5
-      min-idle: 5
-      max-active: 20
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
+
+logging:
+  level:
+    software.amazon.jdbc: DEBUG
 
 ---
 # RDS MySQL 生产环境
@@ -106,7 +77,6 @@ spring:
     url: jdbc:aws-wrapper:mysql://${RDS_ENDPOINT}:3306/${RDS_DATABASE:testdb}?${JDBC_PARAMS:}wrapperPlugins=auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=${WRAPPER_LOG_LEVEL:INFO}&bgdId=${BGD_ID:rds-cluster}
     username: ${RDS_USERNAME:admin}
     password: ${RDS_PASSWORD}
-    driver-class-name: software.amazon.jdbc.Driver
 
 ---
 # RDS MySQL 开发环境
@@ -118,29 +88,10 @@ spring:
     url: jdbc:aws-wrapper:mysql://${RDS_ENDPOINT}:3306/${RDS_DATABASE:testdb}?${JDBC_PARAMS:}wrapperPlugins=auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=FINE&bgdId=${BGD_ID:rds-cluster}
     username: ${RDS_USERNAME:admin}
     password: ${RDS_PASSWORD}
-    driver-class-name: software.amazon.jdbc.Driver
-    druid:
-      initial-size: 5
-      min-idle: 5
-      max-active: 20
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
 
----
-# 启用 Nacos 服务发现
-spring:
-  config:
-    activate:
-      on-profile: nacos
-  cloud:
-    nacos:
-      discovery:
-        enabled: true
-        server-addr: ${NACOS_SERVER:localhost:8848}
-        namespace: public
-        group: DEFAULT_GROUP
-        service: ${spring.application.name}
-        metadata:
-          version: 1.0.0
-          env: ${SPRING_PROFILES_ACTIVE:dev}
-    service-registry:
-      auto-registration:
-        enabled: true
+logging:
+  level:
+    software.amazon.jdbc: DEBUG
