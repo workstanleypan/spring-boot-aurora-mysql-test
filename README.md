@@ -73,6 +73,25 @@ curl -X POST "http://localhost:8080/api/bluegreen/start-write?numConnections=20&
 
 ## JDBC 配置
 
+### JDBC URL 格式
+
+```
+jdbc:aws-wrapper:mysql://<cluster-endpoint>:3306/<database>?characterEncoding=utf8&wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=FINE&bgdId=<cluster-name>
+```
+
+**重要**: 
+- 必须使用 **集群端点** (Cluster Endpoint)
+- **不要使用** `autoreconnect=true`
+
+### URL 参数说明
+
+| 参数 | 说明 |
+|------|------|
+| `characterEncoding=utf8` | MySQL 字符编码 |
+| `wrapperPlugins=...` | Wrapper 插件链（必需） |
+| `wrapperLoggerLevel=FINE` | 日志级别 |
+| `bgdId=<cluster-name>` | 多集群场景需要配置，单集群可省略 |
+
 ### 插件链
 
 ```

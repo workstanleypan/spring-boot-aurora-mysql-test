@@ -4,6 +4,48 @@
 
 本指南说明如何配置 Spring Boot 应用连接到 AWS Aurora MySQL 集群，并启用 Blue/Green Deployment Plugin。
 
+## JDBC URL 详解
+
+### 完整格式
+
+```
+jdbc:aws-wrapper:mysql://writer_cluster_endpoint/database_name?characterEncoding=utf8&wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=FINE&bgdId=clustername
+```
+
+### 参数说明
+
+| 颜色 | 参数 | 说明 |
+|------|------|------|
+| 🔴 红色 | `writer_cluster_endpoint`, `database_name` | 根据业务修改的连接参数 |
+| 🟢 绿色 | `characterEncoding=utf8` | 原生 MySQL 连接参数 |
+| 🟡 黄色 | `wrapperPlugins=...`, `wrapperLoggerLevel=...` | **必备的 Wrapper 连接参数（重要）** |
+| 🟣 紫色 | `bgdId=clustername` | 多集群场景需要配置（见下文） |
+
+### ⚠️ 重要注意事项
+
+1. **不要使用** `autoreconnect=true` - 会干扰 Wrapper 的故障转移机制
+2. **必须使用集群端点** (Cluster Endpoint)，不能使用实例端点
+
+### bgdId 参数说明
+
+**单集群场景**: 如果应用只连接一个 Aurora MySQL cluster，可以不配置 `bgdId`
+
+**多集群场景**: 如果同一个应用同时连接不同的 Aurora MySQL cluster，需要添加独特数值的 `bgdId`（建议为集群名称），连接到同一个 cluster 的连接需要使用同一个 `bgdId`
+
+#### 多集群配置示例
+
+如同一个应用同时连接 cluster-a 和 cluster-b 两个 Aurora DB cluster:
+
+**连接到 cluster-a 的 URL:**
+```
+jdbc:aws-wrapper:mysql://cluster-a-endpoint/database?characterEncoding=utf8&wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=FINE&bgdId=cluster-a
+```
+
+**连接到 cluster-b 的 URL:**
+```
+jdbc:aws-wrapper:mysql://cluster-b-endpoint/database?characterEncoding=utf8&wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=FINE&bgdId=cluster-b
+```
+
 ## 前提条件
 
 ### 1. Aurora 集群信息
