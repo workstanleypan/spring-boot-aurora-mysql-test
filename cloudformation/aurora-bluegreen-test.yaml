@@ -219,6 +219,19 @@ Resources:
         - Key: Name
           Value: !Sub ${EnvironmentName}-cluster-1-instance-1
 
+  # Reader Instance for Cluster 1
+  AuroraInstance1B:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub ${EnvironmentName}-cluster-1-instance-2
+      DBClusterIdentifier: !Ref AuroraCluster1
+      DBInstanceClass: !Ref InstanceClass
+      Engine: aurora-mysql
+      PubliclyAccessible: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-cluster-1-instance-2
+
   #============================================================================
   # Aurora Cluster 2
   #============================================================================
@@ -256,6 +269,19 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentName}-cluster-2-instance-1
+
+  # Reader Instance for Cluster 2
+  AuroraInstance2B:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub ${EnvironmentName}-cluster-2-instance-2
+      DBClusterIdentifier: !Ref AuroraCluster2
+      DBInstanceClass: !Ref InstanceClass
+      Engine: aurora-mysql
+      PubliclyAccessible: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-cluster-2-instance-2
 
 Outputs:
   VpcId:

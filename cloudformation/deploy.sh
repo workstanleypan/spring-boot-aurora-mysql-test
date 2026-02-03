@@ -7,7 +7,7 @@ set -e
 
 STACK_NAME="${STACK_NAME:-aurora-bg-test}"
 REGION="${AWS_REGION:-us-east-1}"
-DB_PASSWORD="${DB_PASSWORD:-}"
+DB_PASSWORD="${DB_PASSWORD:-AuroraTest123!}"
 INSTANCE_CLASS="${INSTANCE_CLASS:-db.t3.medium}"
 ENGINE_VERSION="${ENGINE_VERSION:-8.0.mysql_aurora.3.04.2}"
 TARGET_ENGINE_VERSION="${TARGET_ENGINE_VERSION:-8.0.mysql_aurora.3.10.3}"
@@ -31,6 +31,7 @@ usage() {
     echo ""
     echo "Commands:"
     echo "  deploy              Deploy Aurora clusters (Blue)"
+    echo "  init-db             Initialize database tables"
     echo "  create-bluegreen    Create Blue/Green deployments with version upgrade"
     echo "  status              Show deployment status"
     echo "  outputs             Show stack outputs"
@@ -39,20 +40,16 @@ usage() {
     echo "Environment Variables:"
     echo "  STACK_NAME              Stack name (default: aurora-bg-test)"
     echo "  AWS_REGION              AWS region (default: us-east-1)"
-    echo "  DB_PASSWORD             Database password (required for deploy)"
+    echo "  DB_PASSWORD             Database password (default: AuroraTest123!)"
     echo "  INSTANCE_CLASS          Instance class (default: db.t3.medium)"
     echo "  ENGINE_VERSION          Blue cluster version (default: 8.0.mysql_aurora.3.04.2)"
-    echo "  TARGET_ENGINE_VERSION   Green cluster version (default: 8.0.mysql_aurora.3.10.0)"
+    echo "  TARGET_ENGINE_VERSION   Green cluster version (default: 8.0.mysql_aurora.3.10.3)"
     echo ""
-    echo "Examples:"
-    echo "  # Deploy Blue clusters with 3.04.2"
-    echo "  DB_PASSWORD=MyPassword123 ./deploy.sh deploy"
-    echo ""
-    echo "  # Create Blue/Green with upgrade to 3.10.0 LTS"
-    echo "  ./deploy.sh create-bluegreen"
-    echo ""
-    echo "  # Custom versions"
-    echo "  ENGINE_VERSION=8.0.mysql_aurora.3.08.1 TARGET_ENGINE_VERSION=8.0.mysql_aurora.3.10.1 ./deploy.sh deploy"
+    echo "Quick Start:"
+    echo "  ./deploy.sh deploy           # Deploy Aurora clusters"
+    echo "  ./deploy.sh init-db          # Initialize database"
+    echo "  ./deploy.sh create-bluegreen # Create Blue/Green deployments"
+    echo "  ./deploy.sh status           # Check status"
 }
 
 check_aws_cli() {
@@ -101,7 +98,57 @@ deploy_stack() {
     echo ""
     echo -e "${GREEN}✅ Blue clusters deployed successfully!${NC}"
     echo ""
+    echo -e "${YELLOW}Next step: Run './deploy.sh init-db' to initialize database tables${NC}"
+    echo ""
     show_outputs
+}
+
+init_database() {
+    print_header
+    echo -e "${GREEN}Initializing database tables...${NC}"
+    echo ""
+
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    SQL_FILE="$SCRIPT_DIR/init-database.sql"
+
+    if [ ! -f "$SQL_FILE" ]; then
+        echo -e "${RED}Error: SQL file not found: $SQL_FILE${NC}"
+        exit 1
+    fi
+
+    # Get cluster endpoint
+    CLUSTER1_ENDPOINT=$(aws cloudformation describe-stacks \
+        --stack-name "$STACK_NAME" \
+        --query 'Stacks[0].Outputs[?OutputKey==`Cluster1Endpoint`].OutputValue' \
+        --output text \
+        --region "$REGION" 2>/dev/null)
+
+    if [ -z "$CLUSTER1_ENDPOINT" ] || [ "$CLUSTER1_ENDPOINT" == "None" ]; then
+        echo -e "${RED}Error: Could not get cluster endpoint. Is the stack deployed?${NC}"
+        exit 1
+    fi
+
+    echo "Cluster Endpoint: $CLUSTER1_ENDPOINT"
+    echo "Database: testdb"
+    echo ""
+
+    # Check if mysql client is available
+    if ! command -v mysql &> /dev/null; then
+        echo -e "${YELLOW}MySQL client not installed. Install with:${NC}"
+        echo "  sudo yum install -y mysql"
+        echo ""
+        echo "Or run manually:"
+        echo "  mysql -h $CLUSTER1_ENDPOINT -u admin -p'$DB_PASSWORD' testdb < $SQL_FILE"
+        exit 1
+    fi
+
+    echo "Running SQL script..."
+    mysql -h "$CLUSTER1_ENDPOINT" -u admin -p"$DB_PASSWORD" testdb < "$SQL_FILE"
+
+    echo ""
+    echo -e "${GREEN}✅ Database initialized successfully!${NC}"
+    echo ""
+    echo -e "${YELLOW}Next step: Run './deploy.sh create-bluegreen' to create Blue/Green deployments${NC}"
 }
 
 create_bluegreen() {
@@ -281,6 +328,9 @@ check_aws_cli
 case "${1:-}" in
     deploy)
         deploy_stack
+        ;;
+    init-db)
+        init_database
         ;;
     create-bluegreen)
         create_bluegreen
