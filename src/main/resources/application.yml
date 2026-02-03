@@ -1,6 +1,6 @@
 spring:
   application:
-    name: spring-boot-mysql-test
+    name: spring-boot-aurora-mysql-test
   
   # 默认禁用 Nacos（Aurora 测试不需要）
   cloud:

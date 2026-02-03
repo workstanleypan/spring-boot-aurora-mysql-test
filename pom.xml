@@ -6,12 +6,12 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.test</groupId>
-    <artifactId>spring-boot-mysql-test</artifactId>
+    <artifactId>spring-boot-aurora-mysql-test</artifactId>
     <version>1.0.0</version>
     <packaging>jar</packaging>
 
-    <name>Spring Boot MySQL Test</name>
-    <description>Spring Boot test with Docker MySQL</description>
+    <name>Spring Boot Aurora MySQL Test</name>
+    <description>Spring Boot test with AWS Aurora MySQL and JDBC Wrapper</description>
 
     <parent>
         <groupId>org.springframework.boot</groupId>
