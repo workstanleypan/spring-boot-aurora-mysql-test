@@ -8,9 +8,9 @@
 
 ### 完整格式
 
-```
-jdbc:aws-wrapper:mysql://writer_cluster_endpoint/database_name?characterEncoding=utf8&wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=FINE&bgdId=clustername
-```
+<pre>
+jdbc:aws-wrapper:mysql://<span style="color:red"><b>writer_cluster_endpoint</b></span>/<span style="color:red"><b>database_name</b></span>?<span style="color:green">characterEncoding=utf8</span>&<span style="color:#DAA520"><b>wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg</b></span>&<span style="color:#DAA520"><b>wrapperLoggerLevel=FINE</b></span>&<span style="color:purple">bgdId=clustername</span>
+</pre>
 
 ### 参数说明
 
@@ -37,14 +37,14 @@ jdbc:aws-wrapper:mysql://writer_cluster_endpoint/database_name?characterEncoding
 如同一个应用同时连接 cluster-a 和 cluster-b 两个 Aurora DB cluster:
 
 **连接到 cluster-a 的 URL:**
-```
-jdbc:aws-wrapper:mysql://cluster-a-endpoint/database?characterEncoding=utf8&wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=FINE&bgdId=cluster-a
-```
+<pre>
+jdbc:aws-wrapper:mysql://<span style="color:red"><b>cluster-a-endpoint</b></span>/database?characterEncoding=utf8&wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=FINE&<span style="color:purple">bgdId=cluster-a</span>
+</pre>
 
 **连接到 cluster-b 的 URL:**
-```
-jdbc:aws-wrapper:mysql://cluster-b-endpoint/database?characterEncoding=utf8&wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=FINE&bgdId=cluster-b
-```
+<pre>
+jdbc:aws-wrapper:mysql://<span style="color:red"><b>cluster-b-endpoint</b></span>/database?characterEncoding=utf8&wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=FINE&<span style="color:purple">bgdId=cluster-b</span>
+</pre>
 
 ## 前提条件
 
