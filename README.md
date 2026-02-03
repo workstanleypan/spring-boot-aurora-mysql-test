@@ -81,19 +81,6 @@ hikari:
   connection-test-query: SELECT 1
 ```
 
-## Blue/Green 切换测试
-
-```bash
-# 快速测试
-./test-bluegreen-api.sh quick-test
-
-# 标准测试
-./test-bluegreen-api.sh start
-
-# 监控状态
-./test-bluegreen-api.sh monitor
-```
-
 ## API 端点
 
 ```bash
@@ -133,9 +120,7 @@ spring-boot-aurora-mysql-test/
 │   └── resources/
 │       └── application.yml
 ├── run-aurora.sh
-├── run-rds.sh
-├── test-bluegreen-api.sh
-└── docs/
+└── run-rds.sh
 ```
 
 ## 更多文档
