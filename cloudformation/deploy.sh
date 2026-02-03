@@ -9,6 +9,8 @@ STACK_NAME="${STACK_NAME:-aurora-bg-test}"
 REGION="${AWS_REGION:-us-east-1}"
 DB_PASSWORD="${DB_PASSWORD:-}"
 INSTANCE_CLASS="${INSTANCE_CLASS:-db.t3.medium}"
+ENGINE_VERSION="${ENGINE_VERSION:-8.0.mysql_aurora.3.04.2}"
+TARGET_ENGINE_VERSION="${TARGET_ENGINE_VERSION:-8.0.mysql_aurora.3.10.0}"
 
 # Colors
 RED='\033[0;31m'
@@ -28,23 +30,29 @@ usage() {
     echo "Usage: $0 <command>"
     echo ""
     echo "Commands:"
-    echo "  deploy              Deploy Aurora clusters"
-    echo "  create-bluegreen    Create Blue/Green deployments for both clusters"
+    echo "  deploy              Deploy Aurora clusters (Blue)"
+    echo "  create-bluegreen    Create Blue/Green deployments with version upgrade"
     echo "  status              Show deployment status"
     echo "  outputs             Show stack outputs"
     echo "  delete              Delete everything"
     echo ""
     echo "Environment Variables:"
-    echo "  STACK_NAME          Stack name (default: aurora-bg-test)"
-    echo "  AWS_REGION          AWS region (default: us-east-1)"
-    echo "  DB_PASSWORD         Database password (required for deploy)"
-    echo "  INSTANCE_CLASS      Instance class (default: db.t3.medium)"
+    echo "  STACK_NAME              Stack name (default: aurora-bg-test)"
+    echo "  AWS_REGION              AWS region (default: us-east-1)"
+    echo "  DB_PASSWORD             Database password (required for deploy)"
+    echo "  INSTANCE_CLASS          Instance class (default: db.t3.medium)"
+    echo "  ENGINE_VERSION          Blue cluster version (default: 8.0.mysql_aurora.3.04.2)"
+    echo "  TARGET_ENGINE_VERSION   Green cluster version (default: 8.0.mysql_aurora.3.10.0)"
     echo ""
     echo "Examples:"
-    echo "  DB_PASSWORD=MyPassword123 $0 deploy"
-    echo "  $0 create-bluegreen"
-    echo "  $0 status"
-    echo "  $0 delete"
+    echo "  # Deploy Blue clusters with 3.04.2"
+    echo "  DB_PASSWORD=MyPassword123 ./deploy.sh deploy"
+    echo ""
+    echo "  # Create Blue/Green with upgrade to 3.10.0 LTS"
+    echo "  ./deploy.sh create-bluegreen"
+    echo ""
+    echo "  # Custom versions"
+    echo "  ENGINE_VERSION=8.0.mysql_aurora.3.08.1 TARGET_ENGINE_VERSION=8.0.mysql_aurora.3.10.1 ./deploy.sh deploy"
 }
 
 check_aws_cli() {
@@ -56,11 +64,11 @@ check_aws_cli() {
 
 deploy_stack() {
     print_header
-    echo -e "${GREEN}Deploying Aurora clusters...${NC}"
+    echo -e "${GREEN}Deploying Aurora clusters (Blue)...${NC}"
     
     if [ -z "$DB_PASSWORD" ]; then
         echo -e "${RED}Error: DB_PASSWORD is required${NC}"
-        echo "Usage: DB_PASSWORD=YourPassword $0 deploy"
+        echo "Usage: DB_PASSWORD=YourPassword ./deploy.sh deploy"
         exit 1
     fi
 
@@ -75,6 +83,8 @@ deploy_stack() {
     echo "Stack Name: $STACK_NAME"
     echo "Region: $REGION"
     echo "Instance Class: $INSTANCE_CLASS"
+    echo "Blue Engine Version: $ENGINE_VERSION"
+    echo "Target Green Version: $TARGET_ENGINE_VERSION"
     echo ""
 
     aws cloudformation deploy \
@@ -84,18 +94,22 @@ deploy_stack() {
             EnvironmentName="$STACK_NAME" \
             DBPassword="$DB_PASSWORD" \
             InstanceClass="$INSTANCE_CLASS" \
+            EngineVersion="$ENGINE_VERSION" \
         --capabilities CAPABILITY_IAM \
         --region "$REGION"
 
     echo ""
-    echo -e "${GREEN}✅ Stack deployed successfully!${NC}"
+    echo -e "${GREEN}✅ Blue clusters deployed successfully!${NC}"
     echo ""
     show_outputs
 }
 
 create_bluegreen() {
     print_header
-    echo -e "${GREEN}Creating Blue/Green deployments...${NC}"
+    echo -e "${GREEN}Creating Blue/Green deployments with version upgrade...${NC}"
+    echo ""
+    echo "Blue Version: $ENGINE_VERSION"
+    echo "Green Version (Target): $TARGET_ENGINE_VERSION"
     echo ""
 
     # Get cluster identifiers
@@ -115,26 +129,39 @@ create_bluegreen() {
             echo -e "${RED}Error: Cluster $CLUSTER is not available (status: $STATUS)${NC}"
             exit 1
         fi
-        echo -e "${GREEN}  ✅ $CLUSTER is available${NC}"
+        
+        CURRENT_VERSION=$(aws rds describe-db-clusters \
+            --db-cluster-identifier "$CLUSTER" \
+            --query 'DBClusters[0].EngineVersion' \
+            --output text \
+            --region "$REGION")
+        echo -e "${GREEN}  ✅ $CLUSTER is available (version: $CURRENT_VERSION)${NC}"
     done
 
     echo ""
 
-    # Create Blue/Green deployment for Cluster 1
+    # Get AWS account ID
+    ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+
+    # Create Blue/Green deployment for Cluster 1 with target version
     echo "Creating Blue/Green deployment for $CLUSTER1..."
+    echo "  Source: $ENGINE_VERSION -> Target: $TARGET_ENGINE_VERSION"
     BG1_ID=$(aws rds create-blue-green-deployment \
         --blue-green-deployment-name "${STACK_NAME}-bg-1" \
-        --source "arn:aws:rds:${REGION}:$(aws sts get-caller-identity --query Account --output text):cluster:${CLUSTER1}" \
+        --source "arn:aws:rds:${REGION}:${ACCOUNT_ID}:cluster:${CLUSTER1}" \
+        --target-engine-version "$TARGET_ENGINE_VERSION" \
         --query 'BlueGreenDeployment.BlueGreenDeploymentIdentifier' \
         --output text \
         --region "$REGION")
     echo -e "${GREEN}  ✅ Created: $BG1_ID${NC}"
 
-    # Create Blue/Green deployment for Cluster 2
+    # Create Blue/Green deployment for Cluster 2 with target version
     echo "Creating Blue/Green deployment for $CLUSTER2..."
+    echo "  Source: $ENGINE_VERSION -> Target: $TARGET_ENGINE_VERSION"
     BG2_ID=$(aws rds create-blue-green-deployment \
         --blue-green-deployment-name "${STACK_NAME}-bg-2" \
-        --source "arn:aws:rds:${REGION}:$(aws sts get-caller-identity --query Account --output text):cluster:${CLUSTER2}" \
+        --source "arn:aws:rds:${REGION}:${ACCOUNT_ID}:cluster:${CLUSTER2}" \
+        --target-engine-version "$TARGET_ENGINE_VERSION" \
         --query 'BlueGreenDeployment.BlueGreenDeploymentIdentifier' \
         --output text \
         --region "$REGION")
@@ -147,8 +174,12 @@ create_bluegreen() {
     echo "  Cluster 1: $BG1_ID"
     echo "  Cluster 2: $BG2_ID"
     echo ""
+    echo "Version Upgrade:"
+    echo "  Blue (Source):  $ENGINE_VERSION"
+    echo "  Green (Target): $TARGET_ENGINE_VERSION"
+    echo ""
     echo -e "${YELLOW}Note: It takes 10-30 minutes for Blue/Green deployments to be ready.${NC}"
-    echo "Run '$0 status' to check progress."
+    echo "Run './deploy.sh status' to check progress."
 }
 
 show_status() {
