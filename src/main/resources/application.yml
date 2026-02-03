@@ -20,13 +20,9 @@ spring:
       validation-timeout: 5000
       connection-test-query: SELECT 1
 
-# 日志配置
+# 日志配置 (Log4j2 配置在 log4j2-spring.xml)
 logging:
-  level:
-    root: INFO
-    com.test: DEBUG
-    software.amazon.jdbc: ${WRAPPER_LOG_LEVEL:INFO}
-    com.zaxxer.hikari: INFO
+  config: classpath:log4j2-spring.xml
 
 # Actuator 配置
 management:
@@ -49,7 +45,7 @@ spring:
     activate:
       on-profile: aurora-prod
   datasource:
-    url: jdbc:aws-wrapper:mysql://${AURORA_CLUSTER_ENDPOINT}:3306/${AURORA_DATABASE:testdb}?${JDBC_PARAMS:}wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=${WRAPPER_LOG_LEVEL:INFO}&bgdId=${BGD_ID:cluster-a}
+    url: jdbc:aws-wrapper:mysql://${AURORA_CLUSTER_ENDPOINT}:3306/${AURORA_DATABASE:testdb}?wrapperLoggerLevel=${WRAPPER_LOG_LEVEL:INFO}&wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&bgdId=${BGD_ID:cluster-a}${JDBC_PARAMS:}
 
 ---
 # Aurora MySQL 开发环境（详细日志）
@@ -58,14 +54,10 @@ spring:
     activate:
       on-profile: aurora-dev
   datasource:
-    url: jdbc:aws-wrapper:mysql://${AURORA_CLUSTER_ENDPOINT}:3306/${AURORA_DATABASE:testdb}?${JDBC_PARAMS:}wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=FINE&bgdId=${BGD_ID:cluster-a}
+    url: jdbc:aws-wrapper:mysql://${AURORA_CLUSTER_ENDPOINT}:3306/${AURORA_DATABASE:testdb}?wrapperLoggerLevel=${WRAPPER_LOG_LEVEL:FINE}&wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&bgdId=${BGD_ID:cluster-a}${JDBC_PARAMS:}
     hikari:
       minimum-idle: 5
       maximum-pool-size: 20
-
-logging:
-  level:
-    software.amazon.jdbc: DEBUG
 
 ---
 # RDS MySQL 生产环境
@@ -91,7 +83,3 @@ spring:
     hikari:
       minimum-idle: 5
       maximum-pool-size: 20
-
-logging:
-  level:
-    software.amazon.jdbc: DEBUG

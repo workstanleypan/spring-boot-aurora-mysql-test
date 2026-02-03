@@ -32,22 +32,28 @@ public class BlueGreenTestController {
      * @param request 包含测试参数的请求体
      *                - numThreads: 线程数 (默认: 20)
      *                - readsPerSecond: 每线程每秒读取次数 (默认: 500)
+     *                - writesPerSecond: 每线程每秒写入次数 (默认: 10)
      *                - durationSeconds: 测试持续时间(秒) (默认: 3600, 0 = 持续模式)
+     *                - enableWrites: 是否启用写入 (默认: true)
      * @return 测试ID和配置信息
      */
     @PostMapping("/start")
-    public ResponseEntity<Map<String, Object>> startTest(@RequestBody(required = false) Map<String, Integer> request) {
+    public ResponseEntity<Map<String, Object>> startTest(@RequestBody(required = false) Map<String, Object> request) {
         log.info("POST /api/bluegreen/start");
         
         // Parse parameters with defaults
         int numThreads = 20;
         int readsPerSecond = 500;
+        int writesPerSecond = 10;
         int durationSeconds = 3600;
+        boolean enableWrites = true;
         
         if (request != null) {
-            numThreads = request.getOrDefault("numThreads", numThreads);
-            readsPerSecond = request.getOrDefault("readsPerSecond", readsPerSecond);
-            durationSeconds = request.getOrDefault("durationSeconds", durationSeconds);
+            numThreads = (int) request.getOrDefault("numThreads", numThreads);
+            readsPerSecond = (int) request.getOrDefault("readsPerSecond", readsPerSecond);
+            writesPerSecond = (int) request.getOrDefault("writesPerSecond", writesPerSecond);
+            durationSeconds = (int) request.getOrDefault("durationSeconds", durationSeconds);
+            enableWrites = (boolean) request.getOrDefault("enableWrites", enableWrites);
         }
         
         // Validate parameters
@@ -68,7 +74,7 @@ public class BlueGreenTestController {
         }
         
         try {
-            String testId = testService.startTest(numThreads, readsPerSecond, durationSeconds);
+            String testId = testService.startTest(numThreads, readsPerSecond, writesPerSecond, durationSeconds, enableWrites);
             
             boolean isContinuous = (durationSeconds == 0);
             
@@ -76,6 +82,11 @@ public class BlueGreenTestController {
             config.put("numThreads", numThreads);
             config.put("readsPerSecond", readsPerSecond);
             config.put("totalReadsPerSecond", numThreads * readsPerSecond);
+            config.put("enableWrites", enableWrites);
+            if (enableWrites) {
+                config.put("writesPerSecond", writesPerSecond);
+                config.put("totalWritesPerSecond", numThreads * writesPerSecond);
+            }
             if (isContinuous) {
                 config.put("mode", "continuous");
                 config.put("durationSeconds", "∞ (until manually stopped)");
@@ -216,7 +227,7 @@ public class BlueGreenTestController {
     public ResponseEntity<Map<String, Object>> quickTest() {
         log.info("POST /api/bluegreen/quick-test");
         
-        Map<String, Integer> params = new HashMap<>();
+        Map<String, Object> params = new HashMap<>();
         params.put("numThreads", 5);
         params.put("readsPerSecond", 100);
         params.put("durationSeconds", 60);
@@ -228,7 +239,7 @@ public class BlueGreenTestController {
      * 启动持续测试 - 无限期运行直到手动停止
      */
     @PostMapping("/start-continuous")
-    public ResponseEntity<Map<String, Object>> startContinuous(@RequestBody(required = false) Map<String, Integer> request) {
+    public ResponseEntity<Map<String, Object>> startContinuous(@RequestBody(required = false) Map<String, Object> request) {
         log.info("POST /api/bluegreen/start-continuous");
         
         // Parse parameters with defaults
@@ -236,17 +247,73 @@ public class BlueGreenTestController {
         int readsPerSecond = 500;
         
         if (request != null) {
-            numThreads = request.getOrDefault("numThreads", numThreads);
-            readsPerSecond = request.getOrDefault("readsPerSecond", readsPerSecond);
+            numThreads = (int) request.getOrDefault("numThreads", numThreads);
+            readsPerSecond = (int) request.getOrDefault("readsPerSecond", readsPerSecond);
         }
         
         // Set duration to 0 for continuous mode
-        Map<String, Integer> params = new HashMap<>();
+        Map<String, Object> params = new HashMap<>();
         params.put("numThreads", numThreads);
         params.put("readsPerSecond", readsPerSecond);
         params.put("durationSeconds", 0);
         
         return startTest(params);
+    }
+    
+    /**
+     * 启动持续写入测试 - 每线程独占一个连接，持续写入
+     * 
+     * @param numConnections 连接数量（默认: 10）
+     * @param writeIntervalMs 写入间隔毫秒（默认: 100，即每秒10次）
+     */
+    @PostMapping("/start-write")
+    public ResponseEntity<Map<String, Object>> startWriteTest(
+            @RequestParam(defaultValue = "10") int numConnections,
+            @RequestParam(defaultValue = "100") int writeIntervalMs) {
+        
+        log.info("POST /api/bluegreen/start-write?numConnections={}&writeIntervalMs={}", 
+            numConnections, writeIntervalMs);
+        
+        // Validate parameters
+        if (numConnections < 1 || numConnections > 100) {
+            return ResponseEntity.badRequest().body(Map.of(
+                "error", "numConnections must be between 1 and 100"
+            ));
+        }
+        if (writeIntervalMs < 0 || writeIntervalMs > 10000) {
+            return ResponseEntity.badRequest().body(Map.of(
+                "error", "writeIntervalMs must be between 0 and 10000"
+            ));
+        }
+        
+        try {
+            String testId = testService.startWriteOnlyTest(numConnections, writeIntervalMs);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "started");
+            response.put("testId", testId);
+            response.put("configuration", Map.of(
+                "numConnections", numConnections,
+                "writeIntervalMs", writeIntervalMs,
+                "writesPerSecondPerThread", writeIntervalMs > 0 ? 1000 / writeIntervalMs : "max",
+                "mode", "persistent_connection_write"
+            ));
+            response.put("message", "持续写入测试已启动 - 每线程独占一个连接");
+            
+            log.info("✅ Write test started: {}", testId);
+            return ResponseEntity.ok(response);
+            
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(409).body(Map.of(
+                "error", e.getMessage(),
+                "status", "already_running"
+            ));
+        } catch (Exception e) {
+            log.error("❌ Failed to start write test", e);
+            return ResponseEntity.status(500).body(Map.of(
+                "error", "Failed to start test: " + e.getMessage()
+            ));
+        }
     }
     
     /**

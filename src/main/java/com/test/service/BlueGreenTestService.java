@@ -210,6 +210,230 @@ public class BlueGreenTestService {
     }
     
     /**
+     * 启动简化版持续写入测试
+     * 每个线程持有一个连接，持续写入，不释放连接
+     * 
+     * @param numConnections 连接数量（每个连接一个线程）
+     * @param writeIntervalMs 写入间隔（毫秒），0表示尽可能快
+     * @return Test ID
+     */
+    public String startWriteOnlyTest(int numConnections, int writeIntervalMs) {
+        if (testRunning.get()) {
+            throw new IllegalStateException("Test is already running");
+        }
+        
+        resetStatistics();
+        testRunning.set(true);
+        testStartTime = System.currentTimeMillis();
+        continuousMode.set(true);
+        enableWrites = true;
+        configuredThreads = numConnections;
+        
+        String testId = "WRITE-" + testStartTime;
+        
+        log.info("╔════════════════════════════════════════════════════════════════╗");
+        log.info("║   持续写入测试 - 每线程独占连接                                ║");
+        log.info("╚════════════════════════════════════════════════════════════════╝");
+        log.info("");
+        log.info("📋 配置:");
+        log.info("   Test ID: {}", testId);
+        log.info("   连接数量: {}", numConnections);
+        log.info("   写入间隔: {}ms", writeIntervalMs);
+        log.info("   模式: 每线程持有一个连接，持续写入");
+        log.info("");
+        
+        executor = Executors.newFixedThreadPool(numConnections + 1);
+        CountDownLatch startLatch = new CountDownLatch(1);
+        
+        // 启动写入线程
+        for (int i = 1; i <= numConnections; i++) {
+            final int threadId = i;
+            executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    runPersistentWriteThread(threadId, writeIntervalMs);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+        }
+        
+        // 启动监控线程
+        executor.submit(() -> {
+            try {
+                startLatch.await();
+                runSimpleMonitoringThread();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
+        
+        log.info("🚀 [{}] 启动 {} 个写入线程...", now(), numConnections);
+        startLatch.countDown();
+        
+        return testId;
+    }
+    
+    /**
+     * 持久连接写入线程 - 持有连接不释放，持续写入
+     */
+    private void runPersistentWriteThread(int threadId, int writeIntervalMs) {
+        log.info("✍️  [{}] Write-Thread-{}: 启动持续写入...", now(), threadId);
+        
+        Connection conn = null;
+        String tableName = "bg_write_test";
+        
+        try {
+            // 获取连接并持有
+            conn = dataSource.getConnection();
+            String endpoint = getEndpointInfo(conn);
+            lastEndpoint = endpoint;
+            
+            log.info("✅ [{}] Write-Thread-{} 获得连接: {}", now(), threadId, endpoint);
+            
+            // 创建测试表（如果不存在）
+            ensureTestTable(conn, tableName);
+            
+            long writeCount = 0;
+            long lastReportTime = System.currentTimeMillis();
+            long lastReportCount = 0;
+            
+            // 持续写入直到测试停止
+            while (testRunning.get()) {
+                long writeStart = System.nanoTime();
+                
+                try {
+                    // 执行写入
+                    String sql = "INSERT INTO " + tableName + 
+                        " (thread_id, endpoint, write_time, data) VALUES (?, ?, NOW(), ?)";
+                    try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                        pstmt.setInt(1, threadId);
+                        pstmt.setString(2, endpoint);
+                        pstmt.setString(3, "Thread-" + threadId + " Write #" + writeCount);
+                        pstmt.executeUpdate();
+                    }
+                    
+                    successfulWrites.incrementAndGet();
+                    
+                } catch (SQLException e) {
+                    failedWrites.incrementAndGet();
+                    
+                    String msg = e.getMessage().toLowerCase();
+                    if (msg.contains("read-only") || msg.contains("read only")) {
+                        readOnlyErrors.incrementAndGet();
+                        log.warn("⚠️  [{}] Write-Thread-{}: READ-ONLY 错误 - {}", 
+                            now(), threadId, e.getMessage());
+                    } else if (msg.contains("failover") || msg.contains("connection")) {
+                        failoverCount.incrementAndGet();
+                        log.error("🔄 [{}] Write-Thread-{}: FAILOVER 检测 - {}", 
+                            now(), threadId, e.getMessage());
+                    } else {
+                        log.error("❌ [{}] Write-Thread-{}: 写入失败 - {}", 
+                            now(), threadId, e.getMessage());
+                    }
+                }
+                
+                totalWrites.incrementAndGet();
+                writeCount++;
+                
+                long writeLatency = (System.nanoTime() - writeStart) / 1_000_000;
+                totalWriteLatency.addAndGet(writeLatency);
+                
+                // 每10秒报告一次
+                long currentTime = System.currentTimeMillis();
+                if (currentTime - lastReportTime >= 10000) {
+                    long writesInPeriod = writeCount - lastReportCount;
+                    double actualRate = writesInPeriod / ((currentTime - lastReportTime) / 1000.0);
+                    log.info("📊 [{}] Write-Thread-{}: {} 次写入, 速率: {}/sec, 延迟: {}ms",
+                        now(), threadId, writeCount, String.format("%.1f", actualRate), writeLatency);
+                    lastReportTime = currentTime;
+                    lastReportCount = writeCount;
+                }
+                
+                // 写入间隔
+                if (writeIntervalMs > 0) {
+                    try {
+                        Thread.sleep(writeIntervalMs);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+            }
+            
+            log.info("✅ [{}] Write-Thread-{}: 完成 {} 次写入", now(), threadId, writeCount);
+            
+        } catch (SQLException e) {
+            log.error("❌ [{}] Write-Thread-{} 连接错误: {}", now(), threadId, e.getMessage());
+        } finally {
+            // 测试结束时才关闭连接
+            if (conn != null) {
+                try {
+                    conn.close();
+                    log.info("🔌 [{}] Write-Thread-{} 连接已关闭", now(), threadId);
+                } catch (SQLException e) {
+                    // Ignore
+                }
+            }
+        }
+    }
+    
+    /**
+     * 确保测试表存在
+     */
+    private void ensureTestTable(Connection conn, String tableName) {
+        String sql = "CREATE TABLE IF NOT EXISTS " + tableName + " (" +
+            "id BIGINT AUTO_INCREMENT PRIMARY KEY, " +
+            "thread_id INT NOT NULL, " +
+            "endpoint VARCHAR(255), " +
+            "write_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+            "data TEXT, " +
+            "INDEX idx_thread (thread_id), " +
+            "INDEX idx_time (write_time)" +
+            ") ENGINE=InnoDB";
+        
+        try (Statement stmt = conn.createStatement()) {
+            stmt.execute(sql);
+            log.info("✅ 测试表 {} 已就绪", tableName);
+        } catch (SQLException e) {
+            log.warn("⚠️  创建表失败 (可能已存在): {}", e.getMessage());
+        }
+    }
+    
+    /**
+     * 简化版监控线程
+     */
+    private void runSimpleMonitoringThread() {
+        log.info("📊 [{}] 监控线程启动", now());
+        
+        while (testRunning.get()) {
+            try {
+                Thread.sleep(30000); // 每30秒报告一次
+                
+                long total = totalWrites.get();
+                long success = successfulWrites.get();
+                long failed = failedWrites.get();
+                long readOnly = readOnlyErrors.get();
+                long failovers = failoverCount.get();
+                double successRate = total > 0 ? (success * 100.0 / total) : 0;
+                
+                log.info("╔════════════════════════════════════════════════════════════════╗");
+                log.info("║  [{}] 写入测试状态报告                                  ║", now());
+                log.info("╠════════════════════════════════════════════════════════════════╣");
+                log.info("║  总写入: {:,}  成功: {:,}  失败: {:,}", total, success, failed);
+                log.info("║  成功率: {:.2f}%", successRate);
+                log.info("║  Read-Only 错误: {}  Failover 次数: {}", readOnly, failovers);
+                log.info("║  最后连接: {}", lastEndpoint);
+                log.info("╚════════════════════════════════════════════════════════════════╝");
+                
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+    }
+    
+    /**
      * Get current test status
      */
     public TestStatus getStatus() {

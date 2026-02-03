@@ -2,10 +2,13 @@ package com.test;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.bridge.SLF4JBridgeHandler;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
+
+import java.util.logging.Level;
 
 /**
  * Spring Boot MySQL Test Application
@@ -14,27 +17,43 @@ import org.springframework.context.event.EventListener;
  * 
  * 日志架构：
  * AWS JDBC Wrapper (JUL) → SLF4JBridgeHandler → SLF4J → Log4j2
- * 
- * 注意：JUL Bridge 由 JulBridgeInitializer 自动初始化
  */
 @SpringBootApplication
 public class SpringBootMySQLTestApplication {
     
     private static final Logger log = LoggerFactory.getLogger(SpringBootMySQLTestApplication.class);
     
+    static {
+        // 初始化 JUL 到 SLF4J 的桥接
+        SLF4JBridgeHandler.removeHandlersForRootLogger();
+        SLF4JBridgeHandler.install();
+        
+        // 设置 JUL root logger 级别为 ALL，让所有日志都能通过桥接
+        java.util.logging.Logger rootLogger = java.util.logging.Logger.getLogger("");
+        rootLogger.setLevel(Level.ALL);
+        
+        // 设置 AWS JDBC Wrapper 的日志级别
+        String wrapperLogLevel = System.getenv("WRAPPER_LOG_LEVEL");
+        if (wrapperLogLevel != null && !wrapperLogLevel.isEmpty()) {
+            try {
+                Level level = Level.parse(wrapperLogLevel);
+                java.util.logging.Logger.getLogger("software.amazon.jdbc").setLevel(level);
+                java.util.logging.Logger.getLogger("software.amazon").setLevel(level);
+                System.out.println("[JUL] Set software.amazon.jdbc level to: " + level);
+            } catch (IllegalArgumentException e) {
+                System.err.println("[JUL] Invalid log level: " + wrapperLogLevel);
+            }
+        }
+    }
+    
     public static void main(String[] args) {
         log.info("╔════════════════════════════════════════════════════════════════╗");
-        log.info("║   Spring Boot MySQL Test Application                          ║");
+        log.info("║   Spring Boot Aurora MySQL Test Application                   ║");
         log.info("╚════════════════════════════════════════════════════════════════╝");
         log.info("");
         log.info("📋 Logging Architecture:");
-        log.info("   AWS JDBC Wrapper (JUL)");
-        log.info("   ↓");
-        log.info("   SLF4JBridgeHandler (auto-initialized by JulBridgeInitializer)");
-        log.info("   ↓");
-        log.info("   SLF4J API");
-        log.info("   ↓");
-        log.info("   Log4j2 (Console + RollingFile)");
+        log.info("   AWS JDBC Wrapper (JUL) → SLF4JBridgeHandler → SLF4J → Log4j2");
+        log.info("   WRAPPER_LOG_LEVEL (env): {}", System.getenv("WRAPPER_LOG_LEVEL"));
         log.info("");
         
         SpringApplication.run(SpringBootMySQLTestApplication.class, args);
@@ -50,13 +69,8 @@ public class SpringBootMySQLTestApplication {
         log.info("✅ Application is ready!");
         log.info("📋 Access endpoints:");
         log.info("   - Health: http://localhost:8080/actuator/health");
-        log.info("   - Test: http://localhost:8080/api/test");
-        log.info("   - Users: http://localhost:8080/api/users");
-        log.info("");
-        log.info("📝 Log files:");
-        log.info("   - Info: logs/info.log");
-        log.info("   - Error: logs/error.log");
-        log.info("   - Spring Boot: logs/spring-boot.log");
+        log.info("   - Blue/Green Status: http://localhost:8080/api/bluegreen/status");
+        log.info("   - Continuous Test: http://localhost:8080/api/bluegreen/continuous?duration=60");
         log.info("");
     }
 }

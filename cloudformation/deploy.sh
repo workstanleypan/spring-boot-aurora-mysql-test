@@ -2,86 +2,179 @@
 set -e
 
 #==============================================================================
-# Aurora MySQL Blue/Green Test Environment Deployment Script
+# Aurora MySQL Blue/Green Test Environment
 #==============================================================================
 
-STACK_NAME="${STACK_NAME:-aurora-bg-test}"
-REGION="${AWS_REGION:-us-east-1}"
-DB_PASSWORD="${DB_PASSWORD:-AuroraTest123!}"
-INSTANCE_CLASS="${INSTANCE_CLASS:-db.t3.medium}"
-ENGINE_VERSION="${ENGINE_VERSION:-8.0.mysql_aurora.3.04.2}"
-TARGET_ENGINE_VERSION="${TARGET_ENGINE_VERSION:-8.0.mysql_aurora.3.10.3}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
 NC='\033[0m'
 
-print_header() {
-    echo ""
-    echo "╔════════════════════════════════════════════════════════════════╗"
-    echo "║   Aurora MySQL Blue/Green Test Environment                    ║"
-    echo "╚════════════════════════════════════════════════════════════════╝"
-    echo ""
+#==============================================================================
+# 加载配置
+#==============================================================================
+load_config() {
+    # 优先加载 config.local.env
+    if [ -f "$SCRIPT_DIR/config.local.env" ]; then
+        echo -e "${CYAN}Loading: config.local.env${NC}"
+        set -a
+        source "$SCRIPT_DIR/config.local.env"
+        set +a
+    elif [ -f "$SCRIPT_DIR/config.env" ]; then
+        echo -e "${CYAN}Loading: config.env${NC}"
+        set -a
+        source "$SCRIPT_DIR/config.env"
+        set +a
+    fi
+
+    # 设置默认值
+    STACK_NAME="${STACK_NAME:-aurora-bg-test}"
+    REGION="${AWS_REGION:-${REGION:-us-east-1}}"
+    USE_EXISTING_VPC="${USE_EXISTING_VPC:-true}"
+    VPC_ID="${VPC_ID:-}"
+    SUBNET_IDS="${SUBNET_IDS:-}"
+    DB_USERNAME="${DB_USERNAME:-admin}"
+    DB_PASSWORD="${DB_PASSWORD:-}"
+    DB_NAME="${DB_NAME:-testdb}"
+    INSTANCE_CLASS="${INSTANCE_CLASS:-db.t3.medium}"
+    
+    # 集群配置
+    CLUSTER_COUNT="${CLUSTER_COUNT:-1}"
+    INSTANCES_PER_CLUSTER="${INSTANCES_PER_CLUSTER:-2}"
+    ENGINE_VERSION="${ENGINE_VERSION:-8.0.mysql_aurora.3.04.2}"
+    TARGET_VERSION="${TARGET_VERSION:-8.0.mysql_aurora.3.10.3}"
 }
 
+#==============================================================================
+# 帮助
+#==============================================================================
 usage() {
     echo "Usage: $0 <command>"
     echo ""
     echo "Commands:"
-    echo "  deploy              Deploy Aurora clusters (Blue)"
-    echo "  init-db             Initialize database tables"
-    echo "  create-bluegreen    Create Blue/Green deployments with version upgrade"
-    echo "  status              Show deployment status"
+    echo "  deploy              Deploy Aurora clusters"
+    echo "  init-db             Initialize database (create test users)"
+    echo "  create-bluegreen    Create Blue/Green deployments"
+    echo "  status              Show status"
     echo "  outputs             Show stack outputs"
     echo "  delete              Delete everything"
+    echo "  show-config         Show current configuration"
     echo ""
-    echo "Environment Variables:"
-    echo "  STACK_NAME              Stack name (default: aurora-bg-test)"
-    echo "  AWS_REGION              AWS region (default: us-east-1)"
-    echo "  DB_PASSWORD             Database password (default: AuroraTest123!)"
-    echo "  INSTANCE_CLASS          Instance class (default: db.t3.medium)"
-    echo "  ENGINE_VERSION          Blue cluster version (default: 8.0.mysql_aurora.3.04.2)"
-    echo "  TARGET_ENGINE_VERSION   Green cluster version (default: 8.0.mysql_aurora.3.10.3)"
+    echo "Workflow:"
+    echo "  1. ./deploy.sh deploy           # Create clusters"
+    echo "  2. ./deploy.sh init-db          # Create test users"
+    echo "  3. ./deploy.sh create-bluegreen # Start Blue/Green"
     echo ""
-    echo "Quick Start:"
-    echo "  ./deploy.sh deploy           # Deploy Aurora clusters"
-    echo "  ./deploy.sh init-db          # Initialize database"
-    echo "  ./deploy.sh create-bluegreen # Create Blue/Green deployments"
-    echo "  ./deploy.sh status           # Check status"
+    echo "Examples:"
+    echo "  DB_PASSWORD=MyPass ./deploy.sh deploy"
+    echo "  CLUSTER_COUNT=2 DB_PASSWORD=MyPass ./deploy.sh deploy"
 }
 
-check_aws_cli() {
-    if ! command -v aws &> /dev/null; then
-        echo -e "${RED}Error: AWS CLI is not installed${NC}"
-        exit 1
-    fi
+show_config() {
+    load_config
+    
+    echo ""
+    echo "╔══════════════════════════════════════════════════════════════╗"
+    echo "║   Current Configuration                                     ║"
+    echo "╚══════════════════════════════════════════════════════════════╝"
+    echo ""
+    echo "Stack:           $STACK_NAME"
+    echo "Region:          $REGION"
+    echo ""
+    echo "Clusters:        $CLUSTER_COUNT"
+    echo "Instances/Each:  $INSTANCES_PER_CLUSTER"
+    echo "Engine Version:  $ENGINE_VERSION"
+    echo "Target Version:  $TARGET_VERSION"
+    echo "Instance Class:  $INSTANCE_CLASS"
+    echo ""
+    echo "VPC:             ${VPC_ID:-<auto-detect default>}"
+    echo "Database:        $DB_NAME"
+    echo "Username:        $DB_USERNAME"
+    echo "Password:        ${DB_PASSWORD:+****}"
+    echo ""
+    
+    local total=$((CLUSTER_COUNT * INSTANCES_PER_CLUSTER))
+    echo "Total instances: $total"
+    echo ""
 }
 
+#==============================================================================
+# 部署
+#==============================================================================
 deploy_stack() {
-    print_header
-    echo -e "${GREEN}Deploying Aurora clusters (Blue)...${NC}"
+    load_config
+    
+    echo ""
+    echo "╔══════════════════════════════════════════════════════════════╗"
+    echo "║   Deploying Aurora MySQL Clusters                           ║"
+    echo "╚══════════════════════════════════════════════════════════════╝"
+    echo ""
     
     if [ -z "$DB_PASSWORD" ]; then
         echo -e "${RED}Error: DB_PASSWORD is required${NC}"
-        echo "Usage: DB_PASSWORD=YourPassword ./deploy.sh deploy"
         exit 1
     fi
 
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    # 验证参数
+    if [ "$CLUSTER_COUNT" -lt 1 ] || [ "$CLUSTER_COUNT" -gt 3 ]; then
+        echo -e "${RED}Error: CLUSTER_COUNT must be 1-3${NC}"
+        exit 1
+    fi
+
     TEMPLATE_FILE="$SCRIPT_DIR/aurora-bluegreen-test.yaml"
 
-    if [ ! -f "$TEMPLATE_FILE" ]; then
-        echo -e "${RED}Error: Template file not found: $TEMPLATE_FILE${NC}"
-        exit 1
+    # 自动检测 VPC 和子网
+    if [ "$USE_EXISTING_VPC" = "true" ]; then
+        if [ -z "$VPC_ID" ]; then
+            echo "Auto-detecting default VPC..."
+            VPC_ID=$(aws ec2 describe-vpcs \
+                --filters "Name=is-default,Values=true" \
+                --query 'Vpcs[0].VpcId' \
+                --output text \
+                --region "$REGION" 2>/dev/null)
+            
+            if [ -z "$VPC_ID" ] || [ "$VPC_ID" = "None" ]; then
+                echo -e "${RED}Error: No default VPC found${NC}"
+                exit 1
+            fi
+            echo "  Found: $VPC_ID"
+        fi
+
+        # 获取 VPC CIDR
+        if [ -z "$VPC_CIDR" ]; then
+            VPC_CIDR=$(aws ec2 describe-vpcs \
+                --vpc-ids "$VPC_ID" \
+                --query 'Vpcs[0].CidrBlock' \
+                --output text \
+                --region "$REGION" 2>/dev/null)
+            echo "  VPC CIDR: $VPC_CIDR"
+        fi
+
+        if [ -z "$SUBNET_IDS" ]; then
+            echo "Auto-detecting subnets..."
+            SUBNET_IDS=$(aws ec2 describe-subnets \
+                --filters "Name=vpc-id,Values=$VPC_ID" \
+                --query 'Subnets[*].SubnetId' \
+                --output text \
+                --region "$REGION" 2>/dev/null | tr '\t' ',')
+            SUBNET_IDS=$(echo "$SUBNET_IDS" | cut -d',' -f1,2)
+            echo "  Found: $SUBNET_IDS"
+        fi
+    else
+        VPC_CIDR="10.0.0.0/16"
     fi
 
-    echo "Stack Name: $STACK_NAME"
-    echo "Region: $REGION"
-    echo "Instance Class: $INSTANCE_CLASS"
-    echo "Blue Engine Version: $ENGINE_VERSION"
-    echo "Target Green Version: $TARGET_ENGINE_VERSION"
+    echo ""
+    echo "Deploying:"
+    echo "  Clusters:     $CLUSTER_COUNT"
+    echo "  Instances:    $INSTANCES_PER_CLUSTER per cluster"
+    echo "  Version:      $ENGINE_VERSION"
+    echo "  VPC:          $VPC_ID"
+    echo "  VPC CIDR:     $VPC_CIDR (security group)"
+    echo "  Public IP:    DISABLED"
     echo ""
 
     aws cloudformation deploy \
@@ -89,83 +182,102 @@ deploy_stack() {
         --template-file "$TEMPLATE_FILE" \
         --parameter-overrides \
             EnvironmentName="$STACK_NAME" \
+            DBUsername="$DB_USERNAME" \
             DBPassword="$DB_PASSWORD" \
-            InstanceClass="$INSTANCE_CLASS" \
+            DBName="$DB_NAME" \
+            ClusterCount="$CLUSTER_COUNT" \
+            InstancesPerCluster="$INSTANCES_PER_CLUSTER" \
             EngineVersion="$ENGINE_VERSION" \
-        --capabilities CAPABILITY_IAM \
-        --region "$REGION"
+            InstanceClass="$INSTANCE_CLASS" \
+            UseExistingVpc="$USE_EXISTING_VPC" \
+            VpcId="$VPC_ID" \
+            VpcCidr="$VPC_CIDR" \
+            SubnetIds="$SUBNET_IDS" \
+        --region "$REGION" \
+        --no-fail-on-empty-changeset
 
     echo ""
-    echo -e "${GREEN}✅ Blue clusters deployed successfully!${NC}"
-    echo ""
-    echo -e "${YELLOW}Next step: Run './deploy.sh init-db' to initialize database tables${NC}"
+    echo -e "${GREEN}✅ Deployment complete!${NC}"
     echo ""
     show_outputs
 }
 
-init_database() {
-    print_header
-    echo -e "${GREEN}Initializing database tables...${NC}"
+#==============================================================================
+# 初始化数据库
+#==============================================================================
+init_db() {
+    load_config
+    
+    echo ""
+    echo "╔══════════════════════════════════════════════════════════════╗"
+    echo "║   Initializing Database                                     ║"
+    echo "╚══════════════════════════════════════════════════════════════╝"
     echo ""
 
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    SQL_FILE="$SCRIPT_DIR/init-database.sql"
-
-    if [ ! -f "$SQL_FILE" ]; then
-        echo -e "${RED}Error: SQL file not found: $SQL_FILE${NC}"
-        exit 1
-    fi
-
-    # Get cluster endpoint
-    CLUSTER1_ENDPOINT=$(aws cloudformation describe-stacks \
+    # 获取集群 endpoint
+    ENDPOINT=$(aws cloudformation describe-stacks \
         --stack-name "$STACK_NAME" \
-        --query 'Stacks[0].Outputs[?OutputKey==`Cluster1Endpoint`].OutputValue' \
+        --query "Stacks[0].Outputs[?OutputKey=='Cluster1Endpoint'].OutputValue" \
         --output text \
         --region "$REGION" 2>/dev/null)
 
-    if [ -z "$CLUSTER1_ENDPOINT" ] || [ "$CLUSTER1_ENDPOINT" == "None" ]; then
-        echo -e "${RED}Error: Could not get cluster endpoint. Is the stack deployed?${NC}"
+    if [ -z "$ENDPOINT" ] || [ "$ENDPOINT" = "None" ]; then
+        echo -e "${RED}Error: Cannot find cluster endpoint. Is the stack deployed?${NC}"
         exit 1
     fi
 
-    echo "Cluster Endpoint: $CLUSTER1_ENDPOINT"
-    echo "Database: testdb"
+    echo "Cluster Endpoint: $ENDPOINT"
+    echo "Database: $DB_NAME"
     echo ""
+    
+    if [ -z "$DB_PASSWORD" ]; then
+        echo -e "${RED}Error: DB_PASSWORD is required${NC}"
+        exit 1
+    fi
 
-    # Check if mysql client is available
-    if ! command -v mysql &> /dev/null; then
-        echo -e "${YELLOW}MySQL client not installed. Install with:${NC}"
-        echo "  sudo yum install -y mysql"
+    SQL_FILE="$SCRIPT_DIR/init-database.sql"
+    
+    echo "Creating test users and tables..."
+    echo ""
+    
+    mysql -h "$ENDPOINT" -u "$DB_USERNAME" -p"$DB_PASSWORD" < "$SQL_FILE"
+    
+    if [ $? -eq 0 ]; then
         echo ""
-        echo "Or run manually:"
-        echo "  mysql -h $CLUSTER1_ENDPOINT -u admin -p'$DB_PASSWORD' testdb < $SQL_FILE"
+        echo -e "${GREEN}✅ Database initialized!${NC}"
+        echo ""
+        echo "Test users created:"
+        echo "  - testuser1 / testuser"
+        echo "  - testuser2 / testuser"
+        echo "  - testuser3 / testuser"
+        echo ""
+        echo "Permissions: SELECT on mysql.*, ALL on testdb.*"
+    else
+        echo -e "${RED}Failed to initialize database${NC}"
+        echo "Make sure you can connect to the cluster from this machine."
         exit 1
     fi
-
-    echo "Running SQL script..."
-    mysql -h "$CLUSTER1_ENDPOINT" -u admin -p"$DB_PASSWORD" testdb < "$SQL_FILE"
-
-    echo ""
-    echo -e "${GREEN}✅ Database initialized successfully!${NC}"
-    echo ""
-    echo -e "${YELLOW}Next step: Run './deploy.sh create-bluegreen' to create Blue/Green deployments${NC}"
 }
 
+#==============================================================================
+# 蓝绿部署
+#==============================================================================
 create_bluegreen() {
-    print_header
-    echo -e "${GREEN}Creating Blue/Green deployments with version upgrade...${NC}"
+    load_config
+    
     echo ""
-    echo "Blue Version: $ENGINE_VERSION"
-    echo "Green Version (Target): $TARGET_ENGINE_VERSION"
+    echo "╔══════════════════════════════════════════════════════════════╗"
+    echo "║   Creating Blue/Green Deployments                           ║"
+    echo "╚══════════════════════════════════════════════════════════════╝"
+    echo ""
+    echo "Target Version: $TARGET_VERSION"
     echo ""
 
-    # Get cluster identifiers
-    CLUSTER1="${STACK_NAME}-cluster-1"
-    CLUSTER2="${STACK_NAME}-cluster-2"
+    ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
-    # Check if clusters exist and are available
-    for CLUSTER in "$CLUSTER1" "$CLUSTER2"; do
-        echo "Checking cluster: $CLUSTER"
+    for i in $(seq 1 $CLUSTER_COUNT); do
+        CLUSTER="${STACK_NAME}-cluster-$i"
+        
         STATUS=$(aws rds describe-db-clusters \
             --db-cluster-identifier "$CLUSTER" \
             --query 'DBClusters[0].Status' \
@@ -173,179 +285,121 @@ create_bluegreen() {
             --region "$REGION" 2>/dev/null || echo "not-found")
         
         if [ "$STATUS" != "available" ]; then
-            echo -e "${RED}Error: Cluster $CLUSTER is not available (status: $STATUS)${NC}"
-            exit 1
+            echo -e "${YELLOW}Skipping $CLUSTER (status: $STATUS)${NC}"
+            continue
         fi
-        
-        CURRENT_VERSION=$(aws rds describe-db-clusters \
+
+        CURRENT=$(aws rds describe-db-clusters \
             --db-cluster-identifier "$CLUSTER" \
             --query 'DBClusters[0].EngineVersion' \
             --output text \
             --region "$REGION")
-        echo -e "${GREEN}  ✅ $CLUSTER is available (version: $CURRENT_VERSION)${NC}"
+
+        echo "Creating Blue/Green for $CLUSTER"
+        echo "  $CURRENT -> $TARGET_VERSION"
+
+        BG_ID=$(aws rds create-blue-green-deployment \
+            --blue-green-deployment-name "${STACK_NAME}-bg-$i" \
+            --source "arn:aws:rds:${REGION}:${ACCOUNT_ID}:cluster:${CLUSTER}" \
+            --target-engine-version "$TARGET_VERSION" \
+            --query 'BlueGreenDeployment.BlueGreenDeploymentIdentifier' \
+            --output text \
+            --region "$REGION" 2>&1) || {
+            echo -e "${RED}  Failed: $BG_ID${NC}"
+            continue
+        }
+        
+        echo -e "${GREEN}  ✅ Created: $BG_ID${NC}"
     done
 
     echo ""
-
-    # Get AWS account ID
-    ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-
-    # Create Blue/Green deployment for Cluster 1 with target version
-    echo "Creating Blue/Green deployment for $CLUSTER1..."
-    echo "  Source: $ENGINE_VERSION -> Target: $TARGET_ENGINE_VERSION"
-    BG1_ID=$(aws rds create-blue-green-deployment \
-        --blue-green-deployment-name "${STACK_NAME}-bg-1" \
-        --source "arn:aws:rds:${REGION}:${ACCOUNT_ID}:cluster:${CLUSTER1}" \
-        --target-engine-version "$TARGET_ENGINE_VERSION" \
-        --query 'BlueGreenDeployment.BlueGreenDeploymentIdentifier' \
-        --output text \
-        --region "$REGION")
-    echo -e "${GREEN}  ✅ Created: $BG1_ID${NC}"
-
-    # Create Blue/Green deployment for Cluster 2 with target version
-    echo "Creating Blue/Green deployment for $CLUSTER2..."
-    echo "  Source: $ENGINE_VERSION -> Target: $TARGET_ENGINE_VERSION"
-    BG2_ID=$(aws rds create-blue-green-deployment \
-        --blue-green-deployment-name "${STACK_NAME}-bg-2" \
-        --source "arn:aws:rds:${REGION}:${ACCOUNT_ID}:cluster:${CLUSTER2}" \
-        --target-engine-version "$TARGET_ENGINE_VERSION" \
-        --query 'BlueGreenDeployment.BlueGreenDeploymentIdentifier' \
-        --output text \
-        --region "$REGION")
-    echo -e "${GREEN}  ✅ Created: $BG2_ID${NC}"
-
-    echo ""
-    echo -e "${GREEN}✅ Blue/Green deployments created!${NC}"
-    echo ""
-    echo "Blue/Green Deployment IDs:"
-    echo "  Cluster 1: $BG1_ID"
-    echo "  Cluster 2: $BG2_ID"
-    echo ""
-    echo "Version Upgrade:"
-    echo "  Blue (Source):  $ENGINE_VERSION"
-    echo "  Green (Target): $TARGET_ENGINE_VERSION"
-    echo ""
-    echo -e "${YELLOW}Note: It takes 10-30 minutes for Blue/Green deployments to be ready.${NC}"
-    echo "Run './deploy.sh status' to check progress."
+    echo -e "${YELLOW}Blue/Green deployments take 10-30 minutes.${NC}"
 }
 
+#==============================================================================
+# 状态
+#==============================================================================
 show_status() {
-    print_header
-    echo -e "${GREEN}Deployment Status${NC}"
+    load_config
+    
     echo ""
-
-    # Stack status
-    echo "CloudFormation Stack:"
-    STACK_STATUS=$(aws cloudformation describe-stacks \
+    echo "Stack: $STACK_NAME"
+    aws cloudformation describe-stacks \
         --stack-name "$STACK_NAME" \
         --query 'Stacks[0].StackStatus' \
         --output text \
-        --region "$REGION" 2>/dev/null || echo "NOT_FOUND")
-    echo "  Status: $STACK_STATUS"
-    echo ""
+        --region "$REGION" 2>/dev/null || echo "NOT_FOUND"
 
-    # Cluster status
-    echo "Aurora Clusters:"
-    for CLUSTER in "${STACK_NAME}-cluster-1" "${STACK_NAME}-cluster-2"; do
-        STATUS=$(aws rds describe-db-clusters \
+    echo ""
+    echo "Clusters:"
+    for i in $(seq 1 3); do
+        CLUSTER="${STACK_NAME}-cluster-$i"
+        INFO=$(aws rds describe-db-clusters \
             --db-cluster-identifier "$CLUSTER" \
-            --query 'DBClusters[0].Status' \
+            --query 'DBClusters[0].[Status, EngineVersion]' \
             --output text \
-            --region "$REGION" 2>/dev/null || echo "not-found")
-        echo "  $CLUSTER: $STATUS"
+            --region "$REGION" 2>/dev/null) || continue
+        echo "  $CLUSTER: $INFO"
     done
-    echo ""
 
-    # Blue/Green deployment status
-    echo "Blue/Green Deployments:"
+    echo ""
+    echo "Blue/Green:"
     aws rds describe-blue-green-deployments \
-        --query 'BlueGreenDeployments[?contains(BlueGreenDeploymentName, `'"$STACK_NAME"'`)].[BlueGreenDeploymentName, Status]' \
+        --query "BlueGreenDeployments[?contains(BlueGreenDeploymentName, \`$STACK_NAME\`)].[BlueGreenDeploymentName, Status]" \
         --output table \
-        --region "$REGION" 2>/dev/null || echo "  No Blue/Green deployments found"
+        --region "$REGION" 2>/dev/null || echo "  None"
 }
 
 show_outputs() {
-    echo -e "${GREEN}Stack Outputs:${NC}"
-    echo ""
+    load_config
+    
     aws cloudformation describe-stacks \
         --stack-name "$STACK_NAME" \
         --query 'Stacks[0].Outputs[*].[OutputKey, OutputValue]' \
         --output table \
-        --region "$REGION"
+        --region "$REGION" 2>/dev/null || echo "Stack not found"
 }
 
+#==============================================================================
+# 删除
+#==============================================================================
 delete_all() {
-    print_header
-    echo -e "${YELLOW}⚠️  This will delete all resources!${NC}"
-    read -p "Are you sure? (yes/no): " confirm
-    if [ "$confirm" != "yes" ]; then
-        echo "Cancelled."
-        exit 0
-    fi
-
-    echo ""
-    echo "Deleting Blue/Green deployments..."
+    load_config
     
-    # Delete Blue/Green deployments first
+    echo -e "${YELLOW}⚠️  Delete all resources for: $STACK_NAME${NC}"
+    read -p "Are you sure? (yes/no): " confirm
+    [ "$confirm" != "yes" ] && exit 0
+
+    echo "Deleting Blue/Green deployments..."
     BG_IDS=$(aws rds describe-blue-green-deployments \
-        --query 'BlueGreenDeployments[?contains(BlueGreenDeploymentName, `'"$STACK_NAME"'`)].BlueGreenDeploymentIdentifier' \
+        --query "BlueGreenDeployments[?contains(BlueGreenDeploymentName, \`$STACK_NAME\`)].BlueGreenDeploymentIdentifier" \
         --output text \
         --region "$REGION" 2>/dev/null || echo "")
     
     for BG_ID in $BG_IDS; do
-        if [ -n "$BG_ID" ]; then
-            echo "  Deleting $BG_ID..."
-            aws rds delete-blue-green-deployment \
-                --blue-green-deployment-identifier "$BG_ID" \
-                --delete-target \
-                --region "$REGION" 2>/dev/null || true
-        fi
+        [ -n "$BG_ID" ] && aws rds delete-blue-green-deployment \
+            --blue-green-deployment-identifier "$BG_ID" \
+            --delete-target \
+            --region "$REGION" 2>/dev/null || true
     done
 
-    echo ""
-    echo "Waiting for Blue/Green deployments to be deleted..."
-    sleep 30
-
-    echo ""
     echo "Deleting CloudFormation stack..."
-    aws cloudformation delete-stack \
-        --stack-name "$STACK_NAME" \
-        --region "$REGION"
+    aws cloudformation delete-stack --stack-name "$STACK_NAME" --region "$REGION"
+    aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" --region "$REGION" || true
 
-    echo ""
-    echo "Waiting for stack deletion..."
-    aws cloudformation wait stack-delete-complete \
-        --stack-name "$STACK_NAME" \
-        --region "$REGION" || true
-
-    echo ""
-    echo -e "${GREEN}✅ All resources deleted!${NC}"
+    echo -e "${GREEN}✅ Deleted!${NC}"
 }
 
-# Main
-check_aws_cli
-
+#==============================================================================
+# 主入口
+#==============================================================================
 case "${1:-}" in
-    deploy)
-        deploy_stack
-        ;;
-    init-db)
-        init_database
-        ;;
-    create-bluegreen)
-        create_bluegreen
-        ;;
-    status)
-        show_status
-        ;;
-    outputs)
-        show_outputs
-        ;;
-    delete)
-        delete_all
-        ;;
-    *)
-        usage
-        exit 1
-        ;;
+    deploy) deploy_stack ;;
+    init-db) init_db ;;
+    create-bluegreen) create_bluegreen ;;
+    status) show_status ;;
+    outputs) show_outputs ;;
+    delete) delete_all ;;
+    show-config) show_config ;;
+    *) usage; exit 1 ;;
 esac

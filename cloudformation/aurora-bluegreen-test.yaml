@@ -1,170 +1,179 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Aurora MySQL Blue/Green Deployment Test Environment - Two clusters with automatic Blue/Green deployment'
+Description: 'Aurora MySQL Blue/Green Deployment Test Environment'
 
 Parameters:
   EnvironmentName:
     Type: String
     Default: aurora-bg-test
-    Description: Environment name prefix for resources
+    Description: Environment name prefix
+
+  # VPC Configuration
+  UseExistingVpc:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: Use existing VPC (true) or create new VPC (false)
+
+  VpcId:
+    Type: String
+    Default: ''
+    Description: Existing VPC ID (leave empty to use default VPC)
+
+  VpcCidr:
+    Type: String
+    Default: '172.31.0.0/16'
+    Description: VPC CIDR block for security group (default VPC uses 172.31.0.0/16)
+
+  SubnetIds:
+    Type: CommaDelimitedList
+    Default: ''
+    Description: Comma-separated subnet IDs (leave empty to auto-detect)
+
+  # Cluster Configuration
+  ClusterCount:
+    Type: Number
+    Default: 1
+    MinValue: 1
+    MaxValue: 3
+    Description: Number of Aurora clusters (1-3)
+
+  InstancesPerCluster:
+    Type: Number
+    Default: 2
+    MinValue: 1
+    MaxValue: 3
+    Description: Instances per cluster (1-3)
 
   DBUsername:
     Type: String
     Default: admin
-    Description: Database admin username
-    MinLength: 1
-    MaxLength: 16
-    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
 
   DBPassword:
     Type: String
     NoEcho: true
-    Description: Database admin password
     MinLength: 8
-    MaxLength: 41
 
   DBName:
     Type: String
     Default: testdb
-    Description: Default database name
 
   EngineVersion:
     Type: String
     Default: '8.0.mysql_aurora.3.04.2'
-    Description: Aurora MySQL engine version for Blue cluster
-    AllowedValues:
-      - '8.0.mysql_aurora.3.04.2'
-      - '8.0.mysql_aurora.3.04.3'
-      - '8.0.mysql_aurora.3.08.0'
-      - '8.0.mysql_aurora.3.08.1'
-      - '8.0.mysql_aurora.3.09.0'
-      - '8.0.mysql_aurora.3.09.1'
-
-  TargetEngineVersion:
-    Type: String
-    Default: '8.0.mysql_aurora.3.10.3'
-    Description: Aurora MySQL engine version for Green cluster (LTS upgrade target)
-    AllowedValues:
-      - '8.0.mysql_aurora.3.10.0'
-      - '8.0.mysql_aurora.3.10.1'
-      - '8.0.mysql_aurora.3.10.2'
-      - '8.0.mysql_aurora.3.10.3'
-    ConstraintDescription: 3.10.x LTS versions
 
   InstanceClass:
     Type: String
-    Default: db.r6g.large
-    Description: DB instance class
-    AllowedValues:
-      - db.t3.medium
-      - db.t3.large
-      - db.r6g.large
-      - db.r6g.xlarge
+    Default: db.t3.medium
 
-  VpcCIDR:
-    Type: String
-    Default: 10.0.0.0/16
-    Description: VPC CIDR block
-
-  AllowedCIDR:
-    Type: String
-    Default: 0.0.0.0/0
-    Description: CIDR block allowed to access Aurora (use your IP for production)
+Conditions:
+  CreateNewVpc: !Equals [!Ref UseExistingVpc, 'false']
+  UseExistingVpcCondition: !Equals [!Ref UseExistingVpc, 'true']
+  CreateCluster2: !Or [!Equals [!Ref ClusterCount, 2], !Equals [!Ref ClusterCount, 3]]
+  CreateCluster3: !Equals [!Ref ClusterCount, 3]
+  CreateInstance2: !Or [!Equals [!Ref InstancesPerCluster, 2], !Equals [!Ref InstancesPerCluster, 3]]
+  CreateInstance3: !Equals [!Ref InstancesPerCluster, 3]
+  # Combined conditions for Cluster2 instances
+  CreateCluster2Instance2: !And
+    - !Condition CreateCluster2
+    - !Condition CreateInstance2
+  CreateCluster2Instance3: !And
+    - !Condition CreateCluster2
+    - !Condition CreateInstance3
+  # Combined conditions for Cluster3 instances
+  CreateCluster3Instance2: !And
+    - !Condition CreateCluster3
+    - !Condition CreateInstance2
+  CreateCluster3Instance3: !And
+    - !Condition CreateCluster3
+    - !Condition CreateInstance3
 
 Resources:
   #============================================================================
-  # VPC and Networking
+  # New VPC Resources (only if CreateNewVpc)
   #============================================================================
-  VPC:
+  NewVPC:
     Type: AWS::EC2::VPC
+    Condition: CreateNewVpc
     Properties:
-      CidrBlock: !Ref VpcCIDR
+      CidrBlock: 10.0.0.0/16
       EnableDnsHostnames: true
       EnableDnsSupport: true
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentName}-vpc
 
-  InternetGateway:
-    Type: AWS::EC2::InternetGateway
-    Properties:
-      Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-igw
-
-  InternetGatewayAttachment:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      InternetGatewayId: !Ref InternetGateway
-      VpcId: !Ref VPC
-
-  PublicSubnet1:
+  NewSubnet1:
     Type: AWS::EC2::Subnet
+    Condition: CreateNewVpc
     Properties:
-      VpcId: !Ref VPC
+      VpcId: !Ref NewVPC
       AvailabilityZone: !Select [0, !GetAZs '']
-      CidrBlock: !Select [0, !Cidr [!Ref VpcCIDR, 4, 8]]
-      MapPublicIpOnLaunch: true
+      CidrBlock: 10.0.1.0/24
       Tags:
         - Key: Name
-          Value: !Sub ${EnvironmentName}-public-subnet-1
+          Value: !Sub ${EnvironmentName}-subnet-1
 
-  PublicSubnet2:
+  NewSubnet2:
     Type: AWS::EC2::Subnet
+    Condition: CreateNewVpc
     Properties:
-      VpcId: !Ref VPC
+      VpcId: !Ref NewVPC
       AvailabilityZone: !Select [1, !GetAZs '']
-      CidrBlock: !Select [1, !Cidr [!Ref VpcCIDR, 4, 8]]
-      MapPublicIpOnLaunch: true
+      CidrBlock: 10.0.2.0/24
       Tags:
         - Key: Name
-          Value: !Sub ${EnvironmentName}-public-subnet-2
-
-  PublicRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VPC
-      Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-public-rt
-
-  DefaultPublicRoute:
-    Type: AWS::EC2::Route
-    DependsOn: InternetGatewayAttachment
-    Properties:
-      RouteTableId: !Ref PublicRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway
-
-  PublicSubnet1RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId: !Ref PublicRouteTable
-      SubnetId: !Ref PublicSubnet1
-
-  PublicSubnet2RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId: !Ref PublicRouteTable
-      SubnetId: !Ref PublicSubnet2
+          Value: !Sub ${EnvironmentName}-subnet-2
 
   #============================================================================
-  # Security Group
+  # Security Group - VPC Internal Only (NO public access)
   #============================================================================
   AuroraSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub ${EnvironmentName}-aurora-sg
-      GroupDescription: Security group for Aurora MySQL clusters
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
-          CidrIp: !Ref AllowedCIDR
-          Description: MySQL access
+      GroupDescription: Aurora MySQL - VPC internal access only, NO public access
+      VpcId: !If [CreateNewVpc, !Ref NewVPC, !Ref VpcId]
+      # NO SecurityGroupIngress here - we add it via separate resource
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentName}-aurora-sg
+
+  # Allow access from VPC CIDR only
+  AuroraSecurityGroupIngressVpc:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref AuroraSecurityGroup
+      IpProtocol: tcp
+      FromPort: 3306
+      ToPort: 3306
+      CidrIp: !If [CreateNewVpc, '10.0.0.0/16', !Ref VpcCidr]
+      Description: VPC internal access only
+
+  # Allow self-reference (instances in same SG can communicate)
+  AuroraSecurityGroupIngressSelf:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref AuroraSecurityGroup
+      IpProtocol: tcp
+      FromPort: 3306
+      ToPort: 3306
+      SourceSecurityGroupId: !Ref AuroraSecurityGroup
+      Description: Self-reference for cluster communication
+
+  #============================================================================
+  # DB Cluster Parameter Group (Required for Blue/Green Deployment)
+  # Enables binlog for logical replication
+  #============================================================================
+  AuroraClusterParameterGroup:
+    Type: AWS::RDS::DBClusterParameterGroup
+    Properties:
+      Description: Aurora MySQL parameter group with binlog enabled for Blue/Green
+      Family: aurora-mysql8.0
+      Parameters:
+        binlog_format: ROW
+        binlog_row_image: FULL
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-cluster-pg
 
   #============================================================================
   # DB Subnet Group
@@ -172,19 +181,19 @@ Resources:
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: !Sub ${EnvironmentName}-subnet-group
-      DBSubnetGroupDescription: Subnet group for Aurora clusters
-      SubnetIds:
-        - !Ref PublicSubnet1
-        - !Ref PublicSubnet2
+      DBSubnetGroupDescription: Aurora subnet group
+      SubnetIds: !If 
+        - CreateNewVpc
+        - [!Ref NewSubnet1, !Ref NewSubnet2]
+        - !Ref SubnetIds
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentName}-subnet-group
 
   #============================================================================
-  # Aurora Cluster 1
+  # Cluster 1
   #============================================================================
-  AuroraCluster1:
+  Cluster1:
     Type: AWS::RDS::DBCluster
     DeletionPolicy: Delete
     Properties:
@@ -194,49 +203,48 @@ Resources:
       DatabaseName: !Ref DBName
       MasterUsername: !Ref DBUsername
       MasterUserPassword: !Ref DBPassword
+      DBClusterParameterGroupName: !Ref AuroraClusterParameterGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
       VpcSecurityGroupIds:
         - !Ref AuroraSecurityGroup
       BackupRetentionPeriod: 1
-      DeletionProtection: false
-      EnableCloudwatchLogsExports:
-        - error
-        - slowquery
       StorageEncrypted: true
-      Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-cluster-1
 
-  AuroraInstance1A:
+  Cluster1Instance1:
     Type: AWS::RDS::DBInstance
     Properties:
       DBInstanceIdentifier: !Sub ${EnvironmentName}-cluster-1-instance-1
-      DBClusterIdentifier: !Ref AuroraCluster1
+      DBClusterIdentifier: !Ref Cluster1
       DBInstanceClass: !Ref InstanceClass
       Engine: aurora-mysql
-      PubliclyAccessible: true
-      Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-cluster-1-instance-1
+      PubliclyAccessible: false
 
-  # Reader Instance for Cluster 1
-  AuroraInstance1B:
+  Cluster1Instance2:
     Type: AWS::RDS::DBInstance
+    Condition: CreateInstance2
     Properties:
       DBInstanceIdentifier: !Sub ${EnvironmentName}-cluster-1-instance-2
-      DBClusterIdentifier: !Ref AuroraCluster1
+      DBClusterIdentifier: !Ref Cluster1
       DBInstanceClass: !Ref InstanceClass
       Engine: aurora-mysql
-      PubliclyAccessible: true
-      Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-cluster-1-instance-2
+      PubliclyAccessible: false
+
+  Cluster1Instance3:
+    Type: AWS::RDS::DBInstance
+    Condition: CreateInstance3
+    Properties:
+      DBInstanceIdentifier: !Sub ${EnvironmentName}-cluster-1-instance-3
+      DBClusterIdentifier: !Ref Cluster1
+      DBInstanceClass: !Ref InstanceClass
+      Engine: aurora-mysql
+      PubliclyAccessible: false
 
   #============================================================================
-  # Aurora Cluster 2
+  # Cluster 2 (Conditional)
   #============================================================================
-  AuroraCluster2:
+  Cluster2:
     Type: AWS::RDS::DBCluster
+    Condition: CreateCluster2
     DeletionPolicy: Delete
     Properties:
       DBClusterIdentifier: !Sub ${EnvironmentName}-cluster-2
@@ -245,96 +253,131 @@ Resources:
       DatabaseName: !Ref DBName
       MasterUsername: !Ref DBUsername
       MasterUserPassword: !Ref DBPassword
+      DBClusterParameterGroupName: !Ref AuroraClusterParameterGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
       VpcSecurityGroupIds:
         - !Ref AuroraSecurityGroup
       BackupRetentionPeriod: 1
-      DeletionProtection: false
-      EnableCloudwatchLogsExports:
-        - error
-        - slowquery
       StorageEncrypted: true
-      Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-cluster-2
 
-  AuroraInstance2A:
+  Cluster2Instance1:
     Type: AWS::RDS::DBInstance
+    Condition: CreateCluster2
     Properties:
       DBInstanceIdentifier: !Sub ${EnvironmentName}-cluster-2-instance-1
-      DBClusterIdentifier: !Ref AuroraCluster2
+      DBClusterIdentifier: !Ref Cluster2
       DBInstanceClass: !Ref InstanceClass
       Engine: aurora-mysql
-      PubliclyAccessible: true
-      Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-cluster-2-instance-1
+      PubliclyAccessible: false
 
-  # Reader Instance for Cluster 2
-  AuroraInstance2B:
+  Cluster2Instance2:
     Type: AWS::RDS::DBInstance
+    Condition: CreateCluster2Instance2
     Properties:
       DBInstanceIdentifier: !Sub ${EnvironmentName}-cluster-2-instance-2
-      DBClusterIdentifier: !Ref AuroraCluster2
+      DBClusterIdentifier: !Ref Cluster2
       DBInstanceClass: !Ref InstanceClass
       Engine: aurora-mysql
-      PubliclyAccessible: true
-      Tags:
-        - Key: Name
-          Value: !Sub ${EnvironmentName}-cluster-2-instance-2
+      PubliclyAccessible: false
+
+  Cluster2Instance3:
+    Type: AWS::RDS::DBInstance
+    Condition: CreateCluster2Instance3
+    Properties:
+      DBInstanceIdentifier: !Sub ${EnvironmentName}-cluster-2-instance-3
+      DBClusterIdentifier: !Ref Cluster2
+      DBInstanceClass: !Ref InstanceClass
+      Engine: aurora-mysql
+      PubliclyAccessible: false
+
+  #============================================================================
+  # Cluster 3 (Conditional)
+  #============================================================================
+  Cluster3:
+    Type: AWS::RDS::DBCluster
+    Condition: CreateCluster3
+    DeletionPolicy: Delete
+    Properties:
+      DBClusterIdentifier: !Sub ${EnvironmentName}-cluster-3
+      Engine: aurora-mysql
+      EngineVersion: !Ref EngineVersion
+      DatabaseName: !Ref DBName
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      DBClusterParameterGroupName: !Ref AuroraClusterParameterGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VpcSecurityGroupIds:
+        - !Ref AuroraSecurityGroup
+      BackupRetentionPeriod: 1
+      StorageEncrypted: true
+
+  Cluster3Instance1:
+    Type: AWS::RDS::DBInstance
+    Condition: CreateCluster3
+    Properties:
+      DBInstanceIdentifier: !Sub ${EnvironmentName}-cluster-3-instance-1
+      DBClusterIdentifier: !Ref Cluster3
+      DBInstanceClass: !Ref InstanceClass
+      Engine: aurora-mysql
+      PubliclyAccessible: false
+
+  Cluster3Instance2:
+    Type: AWS::RDS::DBInstance
+    Condition: CreateCluster3Instance2
+    Properties:
+      DBInstanceIdentifier: !Sub ${EnvironmentName}-cluster-3-instance-2
+      DBClusterIdentifier: !Ref Cluster3
+      DBInstanceClass: !Ref InstanceClass
+      Engine: aurora-mysql
+      PubliclyAccessible: false
+
+  Cluster3Instance3:
+    Type: AWS::RDS::DBInstance
+    Condition: CreateCluster3Instance3
+    Properties:
+      DBInstanceIdentifier: !Sub ${EnvironmentName}-cluster-3-instance-3
+      DBClusterIdentifier: !Ref Cluster3
+      DBInstanceClass: !Ref InstanceClass
+      Engine: aurora-mysql
+      PubliclyAccessible: false
+
+  Cluster3Instance2:
+    Type: AWS::RDS::DBInstance
+    Condition: CreateCluster3
+    Properties:
+      DBInstanceIdentifier: !Sub ${EnvironmentName}-cluster-3-instance-2
+      DBClusterIdentifier: !Ref Cluster3
+      DBInstanceClass: !Ref InstanceClass
+      Engine: aurora-mysql
+      PubliclyAccessible: false
 
 Outputs:
-  VpcId:
-    Description: VPC ID
-    Value: !Ref VPC
-    Export:
-      Name: !Sub ${EnvironmentName}-VpcId
-
   Cluster1Endpoint:
-    Description: Aurora Cluster 1 Writer Endpoint
-    Value: !GetAtt AuroraCluster1.Endpoint.Address
-    Export:
-      Name: !Sub ${EnvironmentName}-Cluster1Endpoint
+    Description: Cluster 1 Writer Endpoint
+    Value: !GetAtt Cluster1.Endpoint.Address
 
   Cluster1ReaderEndpoint:
-    Description: Aurora Cluster 1 Reader Endpoint
-    Value: !GetAtt AuroraCluster1.ReadEndpoint.Address
-    Export:
-      Name: !Sub ${EnvironmentName}-Cluster1ReaderEndpoint
+    Description: Cluster 1 Reader Endpoint
+    Value: !GetAtt Cluster1.ReadEndpoint.Address
 
   Cluster2Endpoint:
-    Description: Aurora Cluster 2 Writer Endpoint
-    Value: !GetAtt AuroraCluster2.Endpoint.Address
-    Export:
-      Name: !Sub ${EnvironmentName}-Cluster2Endpoint
+    Condition: CreateCluster2
+    Description: Cluster 2 Writer Endpoint
+    Value: !GetAtt Cluster2.Endpoint.Address
 
-  Cluster2ReaderEndpoint:
-    Description: Aurora Cluster 2 Reader Endpoint
-    Value: !GetAtt AuroraCluster2.ReadEndpoint.Address
-    Export:
-      Name: !Sub ${EnvironmentName}-Cluster2ReaderEndpoint
+  Cluster3Endpoint:
+    Condition: CreateCluster3
+    Description: Cluster 3 Writer Endpoint
+    Value: !GetAtt Cluster3.Endpoint.Address
 
-  DatabaseName:
-    Description: Database Name
-    Value: !Ref DBName
+  SecurityGroupId:
+    Description: Aurora Security Group ID
+    Value: !Ref AuroraSecurityGroup
 
-  DatabaseUsername:
-    Description: Database Username
-    Value: !Ref DBUsername
-
-  ConnectionCommand1:
-    Description: MySQL connection command for Cluster 1
-    Value: !Sub 'mysql -h ${AuroraCluster1.Endpoint.Address} -u ${DBUsername} -p ${DBName}'
-
-  ConnectionCommand2:
-    Description: MySQL connection command for Cluster 2
-    Value: !Sub 'mysql -h ${AuroraCluster2.Endpoint.Address} -u ${DBUsername} -p ${DBName}'
-
-  EnvFileContent:
-    Description: Content for .env file (Cluster 1)
+  EnvConfig:
+    Description: Environment configuration
     Value: !Sub |
-      export AURORA_CLUSTER_ENDPOINT="${AuroraCluster1.Endpoint.Address}"
+      export AURORA_CLUSTER_ENDPOINT="${Cluster1.Endpoint.Address}"
       export AURORA_DATABASE="${DBName}"
       export AURORA_USERNAME="${DBUsername}"
       export AURORA_PASSWORD="<your-password>"
-      export WRAPPER_LOG_LEVEL="INFO"
