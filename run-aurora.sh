@@ -49,7 +49,7 @@ if [ "$ENV" = "dev" ]; then
     echo "   Profile: aurora-dev"
     # 只在未设置时才设置默认值
     if [ -z "$WRAPPER_LOG_LEVEL" ]; then
-        export WRAPPER_LOG_LEVEL="FINE"
+        export WRAPPER_LOG_LEVEL="FINEST"
     fi
     echo "   Log Level: $WRAPPER_LOG_LEVEL"
     echo "   Plugins: initialConnection, auroraConnectionTracker, failover2, efm2, bg"
@@ -59,7 +59,7 @@ elif [ "$ENV" = "prod" ]; then
     echo "   Profile: aurora-prod"
     # 只在未设置时才设置默认值
     if [ -z "$WRAPPER_LOG_LEVEL" ]; then
-        export WRAPPER_LOG_LEVEL="INFO"
+        export WRAPPER_LOG_LEVEL="FINE"
     fi
     echo "   Log Level: $WRAPPER_LOG_LEVEL"
     echo "   Plugins: initialConnection, auroraConnectionTracker, failover2, efm2, bg"

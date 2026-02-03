@@ -30,7 +30,7 @@ export AURORA_CLUSTER_ENDPOINT="<cluster-endpoint>"
 export AURORA_DATABASE="testdb"
 export AURORA_USERNAME="admin"
 export AURORA_PASSWORD="<password>"
-export WRAPPER_LOG_LEVEL="FINEST"  # 可选: SEVERE|WARNING|INFO|FINE|FINER|FINEST
+export WRAPPER_LOG_LEVEL="FINE"  # 可选: SEVERE|WARNING|INFO|FINE|FINER|FINEST
 
 # 启动
 ./run-aurora.sh prod
@@ -93,10 +93,10 @@ wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg
 
 | 级别 | 说明 |
 |------|------|
-| `INFO` | 默认，基本信息 |
-| `FINE` | 显示 BG 插件状态、连接事件 |
+| `INFO` | 基本信息 |
+| `FINE` | 生产环境推荐，显示 BG 插件状态、连接事件 |
 | `FINER` | 详细插件执行流程 |
-| `FINEST` | 最详细调试信息 |
+| `FINEST` | 测试环境推荐，最详细调试信息 |
 
 ## 文档
 
