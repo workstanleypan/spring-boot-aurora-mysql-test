@@ -127,6 +127,7 @@ spring-boot-aurora-mysql-test/
 
 - [docs/AURORA_CONFIGURATION_GUIDE.md](docs/AURORA_CONFIGURATION_GUIDE.md) - Aurora 配置详解
 - [docs/BLUEGREEN_TEST_GUIDE.md](docs/BLUEGREEN_TEST_GUIDE.md) - Blue/Green 测试指南
+- [cloudformation/](cloudformation/) - 一键部署 Aurora 测试环境
 
 ## License
 

@@ -1,0 +1,300 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Aurora MySQL Blue/Green Deployment Test Environment - Two clusters with automatic Blue/Green deployment'
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: aurora-bg-test
+    Description: Environment name prefix for resources
+
+  DBUsername:
+    Type: String
+    Default: admin
+    Description: Database admin username
+    MinLength: 1
+    MaxLength: 16
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+
+  DBPassword:
+    Type: String
+    NoEcho: true
+    Description: Database admin password
+    MinLength: 8
+    MaxLength: 41
+
+  DBName:
+    Type: String
+    Default: testdb
+    Description: Default database name
+
+  EngineVersion:
+    Type: String
+    Default: '8.0.mysql_aurora.3.05.2'
+    Description: Aurora MySQL engine version
+    AllowedValues:
+      - '8.0.mysql_aurora.3.05.2'
+      - '8.0.mysql_aurora.3.04.2'
+      - '8.0.mysql_aurora.3.03.3'
+
+  InstanceClass:
+    Type: String
+    Default: db.r6g.large
+    Description: DB instance class
+    AllowedValues:
+      - db.t3.medium
+      - db.t3.large
+      - db.r6g.large
+      - db.r6g.xlarge
+
+  VpcCIDR:
+    Type: String
+    Default: 10.0.0.0/16
+    Description: VPC CIDR block
+
+  AllowedCIDR:
+    Type: String
+    Default: 0.0.0.0/0
+    Description: CIDR block allowed to access Aurora (use your IP for production)
+
+Resources:
+  #============================================================================
+  # VPC and Networking
+  #============================================================================
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-vpc
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-igw
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Select [0, !Cidr [!Ref VpcCIDR, 4, 8]]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-public-subnet-1
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !Select [1, !Cidr [!Ref VpcCIDR, 4, 8]]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-public-subnet-2
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-public-rt
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  #============================================================================
+  # Security Group
+  #============================================================================
+  AuroraSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub ${EnvironmentName}-aurora-sg
+      GroupDescription: Security group for Aurora MySQL clusters
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: !Ref AllowedCIDR
+          Description: MySQL access
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-aurora-sg
+
+  #============================================================================
+  # DB Subnet Group
+  #============================================================================
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub ${EnvironmentName}-subnet-group
+      DBSubnetGroupDescription: Subnet group for Aurora clusters
+      SubnetIds:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-subnet-group
+
+  #============================================================================
+  # Aurora Cluster 1
+  #============================================================================
+  AuroraCluster1:
+    Type: AWS::RDS::DBCluster
+    DeletionPolicy: Delete
+    Properties:
+      DBClusterIdentifier: !Sub ${EnvironmentName}-cluster-1
+      Engine: aurora-mysql
+      EngineVersion: !Ref EngineVersion
+      DatabaseName: !Ref DBName
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VpcSecurityGroupIds:
+        - !Ref AuroraSecurityGroup
+      BackupRetentionPeriod: 1
+      DeletionProtection: false
+      EnableCloudwatchLogsExports:
+        - error
+        - slowquery
+      StorageEncrypted: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-cluster-1
+
+  AuroraInstance1A:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub ${EnvironmentName}-cluster-1-instance-1
+      DBClusterIdentifier: !Ref AuroraCluster1
+      DBInstanceClass: !Ref InstanceClass
+      Engine: aurora-mysql
+      PubliclyAccessible: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-cluster-1-instance-1
+
+  #============================================================================
+  # Aurora Cluster 2
+  #============================================================================
+  AuroraCluster2:
+    Type: AWS::RDS::DBCluster
+    DeletionPolicy: Delete
+    Properties:
+      DBClusterIdentifier: !Sub ${EnvironmentName}-cluster-2
+      Engine: aurora-mysql
+      EngineVersion: !Ref EngineVersion
+      DatabaseName: !Ref DBName
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VpcSecurityGroupIds:
+        - !Ref AuroraSecurityGroup
+      BackupRetentionPeriod: 1
+      DeletionProtection: false
+      EnableCloudwatchLogsExports:
+        - error
+        - slowquery
+      StorageEncrypted: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-cluster-2
+
+  AuroraInstance2A:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub ${EnvironmentName}-cluster-2-instance-1
+      DBClusterIdentifier: !Ref AuroraCluster2
+      DBInstanceClass: !Ref InstanceClass
+      Engine: aurora-mysql
+      PubliclyAccessible: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-cluster-2-instance-1
+
+Outputs:
+  VpcId:
+    Description: VPC ID
+    Value: !Ref VPC
+    Export:
+      Name: !Sub ${EnvironmentName}-VpcId
+
+  Cluster1Endpoint:
+    Description: Aurora Cluster 1 Writer Endpoint
+    Value: !GetAtt AuroraCluster1.Endpoint.Address
+    Export:
+      Name: !Sub ${EnvironmentName}-Cluster1Endpoint
+
+  Cluster1ReaderEndpoint:
+    Description: Aurora Cluster 1 Reader Endpoint
+    Value: !GetAtt AuroraCluster1.ReadEndpoint.Address
+    Export:
+      Name: !Sub ${EnvironmentName}-Cluster1ReaderEndpoint
+
+  Cluster2Endpoint:
+    Description: Aurora Cluster 2 Writer Endpoint
+    Value: !GetAtt AuroraCluster2.Endpoint.Address
+    Export:
+      Name: !Sub ${EnvironmentName}-Cluster2Endpoint
+
+  Cluster2ReaderEndpoint:
+    Description: Aurora Cluster 2 Reader Endpoint
+    Value: !GetAtt AuroraCluster2.ReadEndpoint.Address
+    Export:
+      Name: !Sub ${EnvironmentName}-Cluster2ReaderEndpoint
+
+  DatabaseName:
+    Description: Database Name
+    Value: !Ref DBName
+
+  DatabaseUsername:
+    Description: Database Username
+    Value: !Ref DBUsername
+
+  ConnectionCommand1:
+    Description: MySQL connection command for Cluster 1
+    Value: !Sub 'mysql -h ${AuroraCluster1.Endpoint.Address} -u ${DBUsername} -p ${DBName}'
+
+  ConnectionCommand2:
+    Description: MySQL connection command for Cluster 2
+    Value: !Sub 'mysql -h ${AuroraCluster2.Endpoint.Address} -u ${DBUsername} -p ${DBName}'
+
+  EnvFileContent:
+    Description: Content for .env file (Cluster 1)
+    Value: !Sub |
+      export AURORA_CLUSTER_ENDPOINT="${AuroraCluster1.Endpoint.Address}"
+      export AURORA_DATABASE="${DBName}"
+      export AURORA_USERNAME="${DBUsername}"
+      export AURORA_PASSWORD="<your-password>"
+      export WRAPPER_LOG_LEVEL="INFO"
