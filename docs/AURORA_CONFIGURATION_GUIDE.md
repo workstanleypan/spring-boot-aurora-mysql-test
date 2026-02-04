@@ -8,18 +8,35 @@
 
 ### 完整格式
 
-<pre>
-jdbc:aws-wrapper:mysql://<span style="color:red"><b>writer_cluster_endpoint</b></span>/<span style="color:red"><b>database_name</b></span>?<span style="color:green">characterEncoding=utf8</span>&<span style="color:#DAA520"><b>wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg</b></span>&<span style="color:#DAA520"><b>wrapperLoggerLevel=FINE</b></span>&<span style="color:purple">bgdId=clustername</span>
-</pre>
+```
+jdbc:aws-wrapper:mysql://[红色:writer_cluster_endpoint]/[红色:database_name]?[绿色:characterEncoding=utf8]&[黄色:wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg]&[黄色:wrapperLoggerLevel=FINE]&[紫色:bgdId=clustername]
+```
+
+**实际示例:**
+```
+jdbc:aws-wrapper:mysql://my-cluster.cluster-xxx.us-east-1.rds.amazonaws.com/testdb?characterEncoding=utf8&wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=FINE&bgdId=my-cluster
+```
 
 ### 参数说明
 
-| 颜色 | 参数 | 说明 |
-|------|------|------|
+| 颜色标记 | 参数 | 说明 |
+|----------|------|------|
 | 🔴 红色 | `writer_cluster_endpoint`, `database_name` | 根据业务修改的连接参数 |
 | 🟢 绿色 | `characterEncoding=utf8` | 原生 MySQL 连接参数 |
 | 🟡 黄色 | `wrapperPlugins=...`, `wrapperLoggerLevel=...` | **必备的 Wrapper 连接参数（重要）** |
 | 🟣 紫色 | `bgdId=clustername` | 多集群场景需要配置（见下文） |
+
+### URL 各部分拆解
+
+```diff
+jdbc:aws-wrapper:mysql://
+- writer_cluster_endpoint          ← 🔴 集群端点（必须是 Cluster Endpoint）
+- /database_name                   ← 🔴 数据库名称
++ ?characterEncoding=utf8          ← 🟢 MySQL 原生参数
+! &wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg  ← 🟡 Wrapper 插件（必需）
+! &wrapperLoggerLevel=FINE         ← 🟡 日志级别（必需）
+# &bgdId=clustername               ← 🟣 集群标识（多集群时必需）
+```
 
 ### ⚠️ 重要注意事项
 
@@ -37,14 +54,14 @@ jdbc:aws-wrapper:mysql://<span style="color:red"><b>writer_cluster_endpoint</b><
 如同一个应用同时连接 cluster-a 和 cluster-b 两个 Aurora DB cluster:
 
 **连接到 cluster-a 的 URL:**
-<pre>
-jdbc:aws-wrapper:mysql://<span style="color:red"><b>cluster-a-endpoint</b></span>/database?characterEncoding=utf8&wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=FINE&<span style="color:purple">bgdId=cluster-a</span>
-</pre>
+```
+jdbc:aws-wrapper:mysql://cluster-a.cluster-xxx.rds.amazonaws.com/database?characterEncoding=utf8&wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=FINE&bgdId=cluster-a
+```
 
 **连接到 cluster-b 的 URL:**
-<pre>
-jdbc:aws-wrapper:mysql://<span style="color:red"><b>cluster-b-endpoint</b></span>/database?characterEncoding=utf8&wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=FINE&<span style="color:purple">bgdId=cluster-b</span>
-</pre>
+```
+jdbc:aws-wrapper:mysql://cluster-b.cluster-xxx.rds.amazonaws.com/database?characterEncoding=utf8&wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=FINE&bgdId=cluster-b
+```
 
 ## 前提条件
 
