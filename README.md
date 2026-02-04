@@ -1,6 +1,6 @@
 # Spring Boot Aurora MySQL Test
 
-Spring Boot application for testing AWS JDBC Wrapper with Aurora MySQL, supporting Blue/Green Deployment automatic switchover.
+Spring Boot application for testing AWS JDBC Wrapper with Aurora MySQL, supporting Blue/Green Deployment automatic switchover testing.
 
 ## Features
 
@@ -11,33 +11,70 @@ Spring Boot application for testing AWS JDBC Wrapper with Aurora MySQL, supporti
 - Multi-threaded Continuous Write Testing
 - Spring Boot 3.4.2
 
+## Prerequisites
+
+- Java 17+
+- Maven 3.6+
+- AWS CLI (for CloudFormation deployment)
+- Access to Aurora MySQL cluster
+
 ## Quick Start
 
-### 1. Deploy Aurora Cluster
+### 1. Clone and Build
+
+```bash
+# Clone repository
+git clone https://github.com/workstanleypan/spring-boot-aurora-mysql-test.git
+cd spring-boot-aurora-mysql-test
+
+# Build
+mvn clean package -DskipTests
+
+# Or build with tests (requires database connection)
+mvn clean package
+```
+
+### 2. Deploy Aurora Cluster (Optional)
+
+If you don't have an Aurora cluster, use CloudFormation to create one:
 
 ```bash
 cd cloudformation
-./deploy.sh deploy
-./deploy.sh init-db
+
+# Deploy cluster (~15-20 minutes)
+DB_PASSWORD=YourPassword123 ./deploy.sh deploy
+
+# Initialize database (create test users and tables)
+DB_PASSWORD=YourPassword123 ./deploy.sh init-db
+
+# Create Blue/Green deployment (~20-30 minutes)
 ./deploy.sh create-bluegreen
+
+# Get connection info
+./deploy.sh outputs
 ```
 
-### 2. Start Application
+### 3. Configure and Run
 
 ```bash
-export AURORA_CLUSTER_ENDPOINT="<cluster-endpoint>"
+# Set environment variables
+export AURORA_CLUSTER_ENDPOINT="your-cluster.cluster-xxxxx.us-east-1.rds.amazonaws.com"
 export AURORA_DATABASE="testdb"
 export AURORA_USERNAME="admin"
-export AURORA_PASSWORD="<password>"
-export WRAPPER_LOG_LEVEL="FINE"
+export AURORA_PASSWORD="your-password"
+export WRAPPER_LOG_LEVEL="FINE"  # Options: SEVERE|WARNING|INFO|FINE|FINER|FINEST
 
+# Run application
 ./run-aurora.sh prod
+
+# Or run directly with Maven
+mvn spring-boot:run -Dspring-boot.run.profiles=aurora-prod
 ```
 
-### 3. Run Tests
+### 4. Run Tests
 
 ```bash
-# Continuous write test
+# Start continuous write test - 10 connections, write every 100ms
 curl -X POST "http://localhost:8080/api/bluegreen/start-write?numConnections=10&writeIntervalMs=100"
 
 # Check status
@@ -45,6 +82,22 @@ curl http://localhost:8080/api/bluegreen/status
 
 # Stop test
 curl -X POST http://localhost:8080/api/bluegreen/stop
+```
+
+## Build Options
+
+```bash
+# Standard build (skip tests)
+mvn clean package -DskipTests
+
+# Build with specific profile
+mvn clean package -P production
+
+# Build Docker image (if Dockerfile exists)
+docker build -t aurora-mysql-test .
+
+# Run JAR directly
+java -jar target/spring-boot-aurora-mysql-test-1.0.0.jar --spring.profiles.active=aurora-prod
 ```
 
 ## API Endpoints
@@ -56,16 +109,48 @@ curl -X POST http://localhost:8080/api/bluegreen/stop
 | `/api/bluegreen/stop` | POST | Stop test |
 | `/api/bluegreen/status` | GET | Get test status |
 | `/api/bluegreen/help` | GET | Get help information |
+| `/actuator/health` | GET | Health check |
+| `/api/test` | GET | Test database connection |
 
-## JDBC Configuration
+### Continuous Write Test Parameters
 
-### URL Format
+```bash
+curl -X POST "http://localhost:8080/api/bluegreen/start-write?numConnections=20&writeIntervalMs=50"
+```
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `numConnections` | 10 | Number of connections (1-100) |
+| `writeIntervalMs` | 100 | Write interval in milliseconds (0=fastest) |
+
+## Configuration
+
+### Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `AURORA_CLUSTER_ENDPOINT` | Yes | Aurora cluster endpoint |
+| `AURORA_DATABASE` | Yes | Database name |
+| `AURORA_USERNAME` | Yes | Database username |
+| `AURORA_PASSWORD` | Yes | Database password |
+| `WRAPPER_LOG_LEVEL` | No | Log level (default: INFO) |
+
+### Application Profiles
+
+| Profile | Log Level | Use Case |
+|---------|-----------|----------|
+| `aurora-prod` | FINE | Production |
+| `aurora-dev` | FINEST | Development/Debug |
+
+### JDBC URL Format
 
 ```
-jdbc:aws-wrapper:mysql://<cluster-endpoint>:3306/<database>?characterEncoding=utf8&wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=FINE&bgdId=<cluster-name>
+jdbc:aws-wrapper:mysql://<cluster-endpoint>:3306/<database>?characterEncoding=utf8&wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=FINE
 ```
 
-**Important**: Must use Cluster Endpoint. Do NOT use `autoreconnect=true`.
+**Important**: 
+- Must use **Cluster Endpoint** (contains `.cluster-`)
+- Do NOT use `autoreconnect=true`
 
 ### Plugin Chain
 
@@ -77,19 +162,58 @@ jdbc:aws-wrapper:mysql://<cluster-endpoint>:3306/<database>?characterEncoding=ut
 | `efm2` | Enhanced failure monitoring |
 | `bg` | Blue/Green deployment support |
 
-### Log Levels
+## Project Structure
 
-| Level | Description |
-|-------|-------------|
-| `FINE` | Production recommended |
-| `FINEST` | Testing recommended |
+```
+spring-boot-aurora-mysql-test/
+├── src/main/java/com/test/
+│   ├── SpringBootMySQLTestApplication.java
+│   ├── controller/
+│   │   ├── BlueGreenTestController.java
+│   │   └── UserController.java
+│   ├── service/
+│   │   ├── BlueGreenTestService.java
+│   │   └── UserService.java
+│   ├── repository/
+│   │   └── UserRepository.java
+│   └── model/
+│       └── User.java
+├── src/main/resources/
+│   ├── application.yml
+│   └── log4j2-spring.xml
+├── cloudformation/
+│   ├── deploy.sh
+│   ├── aurora-bluegreen-test.yaml
+│   ├── init-database.sql
+│   └── config.env
+├── docs/
+│   ├── AURORA_CONFIGURATION_GUIDE.md
+│   ├── AURORA_QUICK_START.md
+│   ├── BLUEGREEN_TEST_GUIDE.md
+│   └── PLUGIN_CONFIGURATION.md
+├── run-aurora.sh
+├── run-rds.sh
+├── pom.xml
+└── README.md
+```
 
 ## Documentation
 
-- [Configuration Guide](docs/AURORA_CONFIGURATION_GUIDE.md)
-- [Quick Start](docs/AURORA_QUICK_START.md)
-- [Test Guide](docs/BLUEGREEN_TEST_GUIDE.md)
-- [Chinese Docs](docs/README_CN.md)
+- [Aurora Configuration Guide](docs/AURORA_CONFIGURATION_GUIDE.md)
+- [Aurora Quick Start](docs/AURORA_QUICK_START.md)
+- [Blue/Green Test Guide](docs/BLUEGREEN_TEST_GUIDE.md)
+- [Plugin Configuration](docs/PLUGIN_CONFIGURATION.md)
+- [CloudFormation Deployment](cloudformation/README.md)
+- [中文文档](docs/README_CN.md)
+
+## Cleanup Resources
+
+```bash
+cd cloudformation
+./deploy.sh delete
+```
+
+⚠️ **Remember to delete resources after testing to avoid charges!**
 
 ## License
 
