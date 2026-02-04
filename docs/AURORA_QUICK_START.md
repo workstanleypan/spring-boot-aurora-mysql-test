@@ -1,8 +1,8 @@
-# Aurora MySQL 快速开始
+# Aurora MySQL Quick Start
 
-## 5 分钟快速配置
+## 5-Minute Setup
 
-### 步骤 1: 启动应用
+### Step 1: Start Application
 
 ```bash
 AURORA_CLUSTER_ENDPOINT="your-cluster.cluster-xxxxx.us-east-1.rds.amazonaws.com" \
@@ -12,72 +12,72 @@ AURORA_PASSWORD="your-password" \
 ./run-aurora.sh prod
 ```
 
-### 步骤 2: 验证连接
+### Step 2: Verify Connection
 
 ```bash
 curl http://localhost:8080/api/test
 ```
 
-### 步骤 3: 启动测试
+### Step 3: Start Test
 
 ```bash
-# 持续写入测试
+# Continuous write test
 curl -X POST "http://localhost:8080/api/bluegreen/start-write?numConnections=10&writeIntervalMs=100"
 
-# 查看状态
+# Check status
 curl http://localhost:8080/api/bluegreen/status
 
-# 停止测试
+# Stop test
 curl -X POST http://localhost:8080/api/bluegreen/stop
 ```
 
-## 可用的 Profiles
+## Available Profiles
 
-| Profile | 日志级别 | 使用场景 |
-|---------|----------|----------|
-| `aurora-prod` | FINE | 生产环境 |
-| `aurora-dev` | FINEST | 开发调试 |
+| Profile | Log Level | Use Case |
+|---------|-----------|----------|
+| `aurora-prod` | FINE | Production |
+| `aurora-dev` | FINEST | Development/Debug |
 
 ```bash
-./run-aurora.sh prod   # 生产环境
-./run-aurora.sh dev    # 开发环境
+./run-aurora.sh prod   # Production
+./run-aurora.sh dev    # Development
 ```
 
-## 技术栈
+## Tech Stack
 
-- **连接池**: HikariCP (Spring Boot 默认)
+- **Connection Pool**: HikariCP (Spring Boot default)
 - **JDBC Wrapper**: AWS Advanced JDBC Wrapper 3.1.0
-- **插件**: initialConnection, auroraConnectionTracker, failover2, efm2, bg
+- **Plugins**: initialConnection, auroraConnectionTracker, failover2, efm2, bg
 
-## 查看日志
+## View Logs
 
 ```bash
-# Wrapper 日志
+# Wrapper logs
 tail -f logs/wrapper.log
 
-# 应用日志
+# Application logs
 tail -f logs/spring-boot.log
 
-# BG Plugin 日志
+# BG Plugin logs
 grep -i "blue.*green" logs/wrapper.log
 ```
 
-## 常见问题
+## Common Issues
 
-### 连接超时
+### Connection Timeout
 
 ```bash
 nc -zv your-cluster.cluster-xxxxx.us-east-1.rds.amazonaws.com 3306
 ```
 
-### BG Plugin 不工作
+### BG Plugin Not Working
 
-确保使用**集群端点**（包含 `.cluster-`）：
+Ensure you're using **Cluster Endpoint** (contains `.cluster-`):
 
-✅ 正确: `database-1.cluster-xxxxx.us-east-1.rds.amazonaws.com`  
-❌ 错误: `database-1-instance-1.xxxxx.us-east-1.rds.amazonaws.com`
+✅ Correct: `database-1.cluster-xxxxx.us-east-1.rds.amazonaws.com`  
+❌ Wrong: `database-1-instance-1.xxxxx.us-east-1.rds.amazonaws.com`
 
-## 下一步
+## Next Steps
 
-- [AURORA_CONFIGURATION_GUIDE.md](AURORA_CONFIGURATION_GUIDE.md) - 完整配置指南
-- [BLUEGREEN_TEST_GUIDE.md](BLUEGREEN_TEST_GUIDE.md) - 蓝绿测试指南
+- [AURORA_CONFIGURATION_GUIDE.md](AURORA_CONFIGURATION_GUIDE.md) - Full Configuration Guide
+- [BLUEGREEN_TEST_GUIDE.md](BLUEGREEN_TEST_GUIDE.md) - Blue/Green Test Guide

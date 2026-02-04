@@ -1,71 +1,71 @@
-# Aurora MySQL 配置指南
+# Aurora MySQL Configuration Guide
 
-## 概述
+## Overview
 
-本指南说明如何配置 Spring Boot 应用连接到 AWS Aurora MySQL 集群，并启用 Blue/Green Deployment Plugin。
+This guide explains how to configure a Spring Boot application to connect to AWS Aurora MySQL cluster with Blue/Green Deployment Plugin enabled.
 
-## JDBC URL 详解
+## JDBC URL Details
 
-### 完整格式
+### Complete Format
 
-![JDBC URL 格式说明](images/jdbc-url-format.png)
+![JDBC URL Format](images/jdbc-url-format.png)
 
-**实际示例:**
+**Example:**
 ```
 jdbc:aws-wrapper:mysql://my-cluster.cluster-xxx.us-east-1.rds.amazonaws.com/testdb?characterEncoding=utf8&wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=FINE&bgdId=my-cluster
 ```
 
-### 参数说明
+### Parameter Description
 
-| 颜色标记 | 参数 | 说明 |
-|----------|------|------|
-| 红色 | `writer_cluster_endpoint`, `database_name` | 根据业务修改的连接参数 |
-| 绿色 | `characterEncoding=utf8` | 原生 MySQL 连接参数 |
-| 黄色 | `wrapperPlugins=...`, `wrapperLoggerLevel=...` | **必备的 Wrapper 连接参数（重要）** |
-| 紫色 | `bgdId=clustername` | 多集群场景需要配置（见下文） |
+| Color | Parameter | Description |
+|-------|-----------|-------------|
+| Red | `writer_cluster_endpoint`, `database_name` | Business-specific connection parameters |
+| Green | `characterEncoding=utf8` | Native MySQL connection parameters |
+| Yellow | `wrapperPlugins=...`, `wrapperLoggerLevel=...` | **Required Wrapper parameters (Important)** |
+| Purple | `bgdId=clustername` | Required for multi-cluster scenarios (see below) |
 
-### ⚠️ 重要注意事项
+### Important Notes
 
-1. **不要使用** `autoreconnect=true` - 会干扰 Wrapper 的故障转移机制
-2. **必须使用集群端点** (Cluster Endpoint)，不能使用实例端点
+1. **Do NOT use** `autoreconnect=true` - It interferes with Wrapper's failover mechanism
+2. **Must use Cluster Endpoint**, not instance endpoint
 
-### bgdId 参数说明
+### bgdId Parameter
 
-**单集群场景**: 如果应用只连接一个 Aurora MySQL cluster，可以不配置 `bgdId`
+**Single Cluster**: If your application connects to only one Aurora MySQL cluster, `bgdId` is optional
 
-**多集群场景**: 如果同一个应用同时连接不同的 Aurora MySQL cluster，需要添加独特数值的 `bgdId`（建议为集群名称），连接到同一个 cluster 的连接需要使用同一个 `bgdId`
+**Multi-Cluster**: If your application connects to multiple Aurora MySQL clusters simultaneously, you need to add a unique `bgdId` value (recommended: cluster name). Connections to the same cluster should use the same `bgdId`
 
-#### 多集群配置示例
+#### Multi-Cluster Example
 
-如同一个应用同时连接 cluster-a 和 cluster-b 两个 Aurora DB cluster:
+If an application connects to both cluster-a and cluster-b:
 
-**连接到 cluster-a 的 URL:**
+**URL for cluster-a:**
 ```
 jdbc:aws-wrapper:mysql://cluster-a.cluster-xxx.rds.amazonaws.com/database?characterEncoding=utf8&wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=FINE&bgdId=cluster-a
 ```
 
-**连接到 cluster-b 的 URL:**
+**URL for cluster-b:**
 ```
 jdbc:aws-wrapper:mysql://cluster-b.cluster-xxx.rds.amazonaws.com/database?characterEncoding=utf8&wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=FINE&bgdId=cluster-b
 ```
 
-## 前提条件
+## Prerequisites
 
-### 1. Aurora 集群信息
+### 1. Aurora Cluster Information
 
-- **集群端点 (Cluster Endpoint)**: `database-1.cluster-xxxxx.us-east-1.rds.amazonaws.com`
-- **数据库名称**: `testdb`
-- **用户名**: `admin`
-- **密码**: `your-password`
+- **Cluster Endpoint**: `database-1.cluster-xxxxx.us-east-1.rds.amazonaws.com`
+- **Database Name**: `testdb`
+- **Username**: `admin`
+- **Password**: `your-password`
 
-### 2. 网络访问
+### 2. Network Access
 
-- Aurora 安全组允许应用的入站流量（端口 3306）
-- 应用部署在同一 VPC 或通过 VPC Peering 连接
+- Aurora security group allows inbound traffic on port 3306
+- Application deployed in same VPC or connected via VPC Peering
 
-## 快速配置
+## Quick Configuration
 
-### 使用环境变量启动
+### Using Environment Variables
 
 ```bash
 AURORA_CLUSTER_ENDPOINT="database-1.cluster-xxxxx.us-east-1.rds.amazonaws.com" \
@@ -76,18 +76,18 @@ WRAPPER_LOG_LEVEL="FINE" \
 ./run-aurora.sh prod
 ```
 
-## Profile 说明
+## Profiles
 
-| Profile | 日志级别 | 连接池 | 使用场景 |
-|---------|----------|--------|----------|
-| `aurora-prod` | FINE | max: 50 | 生产环境 |
-| `aurora-dev` | FINEST | max: 20 | 开发调试 |
+| Profile | Log Level | Pool Size | Use Case |
+|---------|-----------|-----------|----------|
+| `aurora-prod` | FINE | max: 50 | Production |
+| `aurora-dev` | FINEST | max: 20 | Development/Debug |
 
-## 技术栈
+## Tech Stack
 
-### 连接池: HikariCP
+### Connection Pool: HikariCP
 
-Spring Boot 默认使用 HikariCP 连接池，配置在 `application.yml`:
+Spring Boot uses HikariCP by default, configured in `application.yml`:
 
 ```yaml
 spring:
@@ -101,69 +101,61 @@ spring:
       connection-timeout: 30000
 ```
 
-### JDBC URL 格式
+### Wrapper Plugins
 
-```
-jdbc:aws-wrapper:mysql://<cluster-endpoint>:3306/<database>?wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=FINE
-```
+| Plugin | Function |
+|--------|----------|
+| `initialConnection` | Initial connection handling |
+| `auroraConnectionTracker` | Aurora connection tracking |
+| `failover2` | Automatic failover |
+| `efm2` | Enhanced failure monitoring |
+| `bg` | Blue/Green deployment support |
 
-**重要**: 必须使用 **集群端点** (Cluster Endpoint)。
+### Log Levels
 
-### Wrapper 插件
+| JUL Level | Log4j2 Level | Description |
+|-----------|--------------|-------------|
+| INFO | INFO | Basic information |
+| FINE | DEBUG | Production recommended, shows BG plugin status |
+| FINER | DEBUG | Detailed plugin execution flow |
+| FINEST | TRACE | Testing recommended, full debug information |
 
-| 插件 | 功能 |
-|------|------|
-| `initialConnection` | 初始连接处理 |
-| `auroraConnectionTracker` | Aurora 连接跟踪 |
-| `failover2` | 自动故障转移 |
-| `efm2` | 增强故障监控 |
-| `bg` | Blue/Green 部署支持 |
+## Verification
 
-### 日志级别
-
-| JUL 级别 | Log4j2 级别 | 说明 |
-|----------|-------------|------|
-| INFO | INFO | 基本信息 |
-| FINE | DEBUG | 生产环境推荐，显示 BG 插件状态 |
-| FINER | DEBUG | 详细插件执行流程 |
-| FINEST | TRACE | 测试环境推荐，完整调试信息 |
-
-## 验证配置
-
-### 1. 测试连接
+### 1. Test Connection
 
 ```bash
 curl http://localhost:8080/api/test
 ```
 
-### 2. 查看日志
+### 2. View Logs
 
 ```bash
-# Wrapper 日志
+# Wrapper logs
 tail -f logs/wrapper.log
 
-# BG Plugin 相关
+# BG Plugin related
 grep -i "blue.*green\|BlueGreen" logs/wrapper.log
 ```
 
-## 常见问题
+## Troubleshooting
 
-### 连接超时
+### Connection Timeout
 
 ```bash
-# 测试网络连通性
+# Test network connectivity
 nc -zv your-cluster.cluster-xxxxx.us-east-1.rds.amazonaws.com 3306
 ```
 
-### BG Plugin 不支持
+### BG Plugin Not Supported
 
-确保使用**集群端点**（包含 `.cluster-`），不是实例端点：
+Ensure you're using **Cluster Endpoint** (contains `.cluster-`), not instance endpoint:
 
-✅ 正确: `database-1.cluster-xxxxx.us-east-1.rds.amazonaws.com`  
-❌ 错误: `database-1-instance-1.xxxxx.us-east-1.rds.amazonaws.com`
+✅ Correct: `database-1.cluster-xxxxx.us-east-1.rds.amazonaws.com`  
+❌ Wrong: `database-1-instance-1.xxxxx.us-east-1.rds.amazonaws.com`
 
-## 相关文档
+## Related Documentation
 
-- [AURORA_QUICK_START.md](AURORA_QUICK_START.md) - 快速开始
-- [BLUEGREEN_TEST_GUIDE.md](BLUEGREEN_TEST_GUIDE.md) - 蓝绿测试指南
-- [PLUGIN_CONFIGURATION.md](PLUGIN_CONFIGURATION.md) - 插件配置说明
+- [AURORA_QUICK_START.md](AURORA_QUICK_START.md) - Quick Start
+- [BLUEGREEN_TEST_GUIDE.md](BLUEGREEN_TEST_GUIDE.md) - Blue/Green Test Guide
+- [PLUGIN_CONFIGURATION.md](PLUGIN_CONFIGURATION.md) - Plugin Configuration

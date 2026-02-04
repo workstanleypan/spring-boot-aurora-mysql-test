@@ -1,6 +1,6 @@
-# AWS JDBC Wrapper 插件配置说明
+# AWS JDBC Wrapper Plugin Configuration
 
-## 插件配置
+## Plugin Configuration
 
 ### Aurora MySQL
 
@@ -14,34 +14,34 @@ wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg
 wrapperPlugins=auroraConnectionTracker,failover2,efm2,bg
 ```
 
-## 插件说明
+## Plugin Description
 
-| 插件 | 功能 | Aurora | RDS |
-|------|------|--------|-----|
-| `initialConnection` | 初始连接策略，智能选择最佳节点 | ✅ 需要 | ❌ 不需要 |
-| `auroraConnectionTracker` | 连接状态追踪 | ✅ 需要 | ✅ 需要 |
-| `failover2` | 自动故障转移 | ✅ 需要 | ✅ 需要 |
-| `efm2` | 增强故障监控 | ✅ 需要 | ✅ 需要 |
-| `bg` | Blue/Green 部署支持 | ✅ 需要 | ✅ 需要 |
+| Plugin | Function | Aurora | RDS |
+|--------|----------|--------|-----|
+| `initialConnection` | Initial connection strategy, smart node selection | Required | Not needed |
+| `auroraConnectionTracker` | Connection state tracking | Required | Required |
+| `failover2` | Automatic failover | Required | Required |
+| `efm2` | Enhanced failure monitoring | Required | Required |
+| `bg` | Blue/Green deployment support | Required | Required |
 
-### 为什么 RDS 不需要 initialConnection？
+### Why RDS doesn't need initialConnection?
 
-RDS 是单实例或主备模式，没有多个读副本需要选择初始连接策略。Aurora 有多个读副本，需要智能选择最佳节点。
+RDS is single instance or primary-standby mode, no need to select from multiple read replicas. Aurora has multiple read replicas and needs smart node selection.
 
-## 日志级别
+## Log Levels
 
-| JUL 级别 | Log4j2 级别 | 说明 |
-|----------|-------------|------|
-| SEVERE | ERROR | 只记录严重错误 |
-| WARNING | WARN | 记录警告和错误 |
-| INFO | INFO | 基本信息 |
-| FINE | DEBUG | 生产环境推荐，显示 BG 插件状态 |
-| FINER | DEBUG | 详细插件执行流程 |
-| FINEST | TRACE | 测试环境推荐，完整调试信息 |
+| JUL Level | Log4j2 Level | Description |
+|-----------|--------------|-------------|
+| SEVERE | ERROR | Only severe errors |
+| WARNING | WARN | Warnings and errors |
+| INFO | INFO | Basic information |
+| FINE | DEBUG | Production recommended, shows BG plugin status |
+| FINER | DEBUG | Detailed plugin execution flow |
+| FINEST | TRACE | Testing recommended, full debug information |
 
-## 配置示例
+## Configuration Examples
 
-### Aurora MySQL (生产环境)
+### Aurora MySQL (Production)
 
 ```yaml
 spring:
@@ -49,7 +49,7 @@ spring:
     url: jdbc:aws-wrapper:mysql://cluster.cluster-xxxxx.rds.amazonaws.com:3306/testdb?wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=FINE
 ```
 
-### RDS MySQL (生产环境)
+### RDS MySQL (Production)
 
 ```yaml
 spring:
@@ -57,9 +57,9 @@ spring:
     url: jdbc:aws-wrapper:mysql://instance.xxxxx.rds.amazonaws.com:3306/testdb?wrapperPlugins=auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=FINE
 ```
 
-## 连接池: HikariCP
+## Connection Pool: HikariCP
 
-Spring Boot 默认使用 HikariCP 连接池：
+Spring Boot uses HikariCP by default:
 
 ```yaml
 spring:
@@ -73,29 +73,29 @@ spring:
       connection-timeout: 30000
 ```
 
-## 验证插件
+## Verify Plugins
 
 ```bash
-# 查看插件加载日志
+# View plugin loading logs
 grep -i "plugin" logs/wrapper.log
 
-# 查看 BG 插件状态
+# View BG plugin status
 grep -i "blue.*green\|BlueGreen" logs/wrapper.log
 ```
 
-## 性能影响
+## Performance Impact
 
-| 插件 | 性能影响 | 说明 |
-|------|---------|------|
-| initialConnection | 极小 | 只在初始连接时执行 |
-| auroraConnectionTracker | 极小 | 轻量级追踪 |
-| failover2 | 小 | 后台监控 |
-| efm2 | 小 | 增强监控 |
-| bg | 极小 | 只在检测到切换时执行 |
+| Plugin | Impact | Notes |
+|--------|--------|-------|
+| initialConnection | Minimal | Only runs on initial connection |
+| auroraConnectionTracker | Minimal | Lightweight tracking |
+| failover2 | Low | Background monitoring |
+| efm2 | Low | Enhanced monitoring |
+| bg | Minimal | Only runs when switchover detected |
 
-**总体影响**: < 5% 的性能开销，换来高可用性和自动故障转移。
+**Overall Impact**: < 5% performance overhead, in exchange for high availability and automatic failover.
 
-## 相关文档
+## Related Documentation
 
-- [AURORA_CONFIGURATION_GUIDE.md](AURORA_CONFIGURATION_GUIDE.md) - Aurora 配置指南
-- [BLUEGREEN_TEST_GUIDE.md](BLUEGREEN_TEST_GUIDE.md) - 蓝绿测试指南
+- [AURORA_CONFIGURATION_GUIDE.md](AURORA_CONFIGURATION_GUIDE.md) - Aurora Configuration Guide
+- [BLUEGREEN_TEST_GUIDE.md](BLUEGREEN_TEST_GUIDE.md) - Blue/Green Test Guide

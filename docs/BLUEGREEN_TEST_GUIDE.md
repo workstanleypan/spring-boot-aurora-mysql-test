@@ -1,12 +1,12 @@
 # Blue/Green Switchover Test Guide
 
-## 概述
+## Overview
 
-测试 AWS JDBC Wrapper 在 Aurora 蓝绿切换时的表现。使用 HikariCP 连接池和多线程持续写入。
+Test AWS JDBC Wrapper behavior during Aurora Blue/Green switchover. Uses HikariCP connection pool with multi-threaded continuous writes.
 
-## 快速开始
+## Quick Start
 
-### 1. 启动应用
+### 1. Start Application
 
 ```bash
 AURORA_CLUSTER_ENDPOINT="your-cluster.cluster-xxxxx.us-east-1.rds.amazonaws.com" \
@@ -17,22 +17,22 @@ WRAPPER_LOG_LEVEL="FINE" \
 ./run-aurora.sh prod
 ```
 
-### 2. 启动测试
+### 2. Start Test
 
 ```bash
-# 持续写入测试 - 10个连接，每100ms写入一次
+# Continuous write test - 10 connections, write every 100ms
 curl -X POST "http://localhost:8080/api/bluegreen/start-write?numConnections=10&writeIntervalMs=100"
 
-# 查看状态
+# Check status
 curl http://localhost:8080/api/bluegreen/status
 
-# 停止测试
+# Stop test
 curl -X POST http://localhost:8080/api/bluegreen/stop
 ```
 
-### 3. 执行蓝绿切换
+### 3. Execute Blue/Green Switchover
 
-在 AWS Console 或使用 CLI 触发切换：
+In AWS Console or using CLI:
 
 ```bash
 aws rds switchover-blue-green-deployment \
@@ -40,28 +40,28 @@ aws rds switchover-blue-green-deployment \
   --switchover-timeout 300
 ```
 
-## API 端点
+## API Endpoints
 
-| 端点 | 方法 | 说明 |
-|------|------|------|
-| `/api/bluegreen/start-write` | POST | 启动持续写入测试 |
-| `/api/bluegreen/start` | POST | 启动读写混合测试 |
-| `/api/bluegreen/stop` | POST | 停止测试 |
-| `/api/bluegreen/status` | GET | 获取测试状态 |
-| `/api/bluegreen/help` | GET | 获取帮助信息 |
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/bluegreen/start-write` | POST | Start continuous write test |
+| `/api/bluegreen/start` | POST | Start read/write mixed test |
+| `/api/bluegreen/stop` | POST | Stop test |
+| `/api/bluegreen/status` | GET | Get test status |
+| `/api/bluegreen/help` | GET | Get help information |
 
-### 持续写入测试参数
+### Continuous Write Test Parameters
 
 ```bash
 curl -X POST "http://localhost:8080/api/bluegreen/start-write?numConnections=20&writeIntervalMs=50"
 ```
 
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `numConnections` | 10 | 连接数量 (1-100) |
-| `writeIntervalMs` | 100 | 写入间隔毫秒 (0=最快) |
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `numConnections` | 10 | Number of connections (1-100) |
+| `writeIntervalMs` | 100 | Write interval in milliseconds (0=fastest) |
 
-### 读写混合测试参数
+### Read/Write Mixed Test Parameters
 
 ```bash
 curl -X POST http://localhost:8080/api/bluegreen/start \
@@ -69,17 +69,17 @@ curl -X POST http://localhost:8080/api/bluegreen/start \
   -d '{"numThreads":20,"readsPerSecond":500,"writesPerSecond":10,"durationSeconds":0,"enableWrites":true}'
 ```
 
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `numThreads` | 20 | 线程数 (1-100) |
-| `readsPerSecond` | 500 | 每线程每秒读取次数 |
-| `writesPerSecond` | 10 | 每线程每秒写入次数 |
-| `durationSeconds` | 3600 | 持续时间秒 (0=持续模式) |
-| `enableWrites` | true | 是否启用写入 |
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `numThreads` | 20 | Number of threads (1-100) |
+| `readsPerSecond` | 500 | Reads per second per thread |
+| `writesPerSecond` | 10 | Writes per second per thread |
+| `durationSeconds` | 3600 | Duration in seconds (0=continuous) |
+| `enableWrites` | true | Enable write operations |
 
-## 技术栈
+## Tech Stack
 
-### 连接池: HikariCP
+### Connection Pool: HikariCP
 
 ```yaml
 spring:
@@ -91,67 +91,67 @@ spring:
       connection-timeout: 30000
 ```
 
-### JDBC Wrapper 插件
+### JDBC Wrapper Plugins
 
 ```
 wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg
 ```
 
-## 查看日志
+## View Logs
 
 ```bash
-# Wrapper 日志
+# Wrapper logs
 tail -f logs/wrapper.log
 
-# 应用日志
+# Application logs
 tail -f logs/spring-boot.log
 
-# BG Plugin 相关
+# BG Plugin related
 grep -i "blue.*green\|BlueGreen" logs/wrapper.log
 
-# Failover 相关
+# Failover related
 grep -i "failover" logs/wrapper.log
 ```
 
-## 监控指标
+## Monitoring Metrics
 
-### 关键指标
-- **总写入次数**: 累计写入次数
-- **成功率**: 成功写入的百分比
-- **Failover 次数**: 检测到的 failover 事件数量
-- **Read-Only 错误**: 写入到只读节点的错误次数
+### Key Metrics
+- **Total Writes**: Cumulative write count
+- **Success Rate**: Percentage of successful writes
+- **Failover Count**: Number of detected failover events
+- **Read-Only Errors**: Errors from writing to read-only node
 
-### 成功标准
-- ✅ 成功率 > 95%: 高可用性
-- ✅ Failover 检测: 正确识别切换事件
-- ✅ 自动恢复: 切换后自动恢复写入
+### Success Criteria
+- ✅ Success rate > 95%: High availability
+- ✅ Failover detection: Correctly identifies switchover events
+- ✅ Auto recovery: Automatically resumes writes after switchover
 
-## 日志级别建议
+## Log Level Recommendations
 
-| 环境 | JUL 级别 | 说明 |
-|------|----------|------|
-| 生产 | FINE | 显示 BG 插件状态、连接事件 |
-| 测试 | FINEST | 完整调试信息 |
+| Environment | JUL Level | Description |
+|-------------|-----------|-------------|
+| Production | FINE | Shows BG plugin status, connection events |
+| Testing | FINEST | Full debug information |
 
-## 故障排查
+## Troubleshooting
 
-### 高失败率
-1. 检查数据库连接稳定性
-2. 查看 Wrapper 日志中的错误
-3. 验证 HikariCP 连接池配置
+### High Failure Rate
+1. Check database connection stability
+2. Review Wrapper logs for errors
+3. Verify HikariCP connection pool configuration
 
-### Failover 未检测到
-1. 确认使用 Cluster Endpoint
-2. 验证 BG Plugin 已启用
-3. 检查日志级别设置 (建议 FINE)
+### Failover Not Detected
+1. Confirm using Cluster Endpoint
+2. Verify BG Plugin is enabled
+3. Check log level setting (recommend FINE)
 
-### 连接异常
+### Connection Exceptions
 ```bash
 grep -A 20 "Exception" logs/spring-boot.log
 grep "HikariPool" logs/spring-boot.log
 ```
 
-## 相关文档
+## Related Documentation
 
-- [AURORA_CONFIGURATION_GUIDE.md](AURORA_CONFIGURATION_GUIDE.md) - Aurora 配置指南
-- [PLUGIN_CONFIGURATION.md](PLUGIN_CONFIGURATION.md) - 插件配置说明
+- [AURORA_CONFIGURATION_GUIDE.md](AURORA_CONFIGURATION_GUIDE.md) - Aurora Configuration Guide
+- [PLUGIN_CONFIGURATION.md](PLUGIN_CONFIGURATION.md) - Plugin Configuration
