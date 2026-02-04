@@ -41,22 +41,19 @@ mvn clean package
 ```bash
 cd cloudformation
 
-# 方式一：使用环境变量（推荐一次性使用）
+# 每次部署会创建新的 stack，名称带时间戳（如 aurora-bg-test-0204-1530）
 DB_PASSWORD=YourPassword123 ./deploy.sh deploy
 
-# 方式二：使用配置文件（推荐重复使用）
-cp config.env config.local.env
-# 编辑 config.local.env 设置 DB_PASSWORD
-./deploy.sh deploy
+# 后续命令自动使用最后部署的 stack
+./deploy.sh init-db              # 初始化数据库
+./deploy.sh create-bluegreen     # 创建蓝绿部署（约 20-30 分钟）
+./deploy.sh outputs              # 获取连接信息
 
-# 初始化数据库（创建测试用户和表）
-DB_PASSWORD=YourPassword123 ./deploy.sh init-db
+# 列出所有 stacks
+./deploy.sh list
 
-# 创建蓝绿部署（约 20-30 分钟）
-./deploy.sh create-bluegreen
-
-# 获取连接信息
-./deploy.sh outputs
+# 使用指定的 stack
+STACK_NAME=aurora-bg-test-0204-1530 ./deploy.sh outputs
 ```
 
 ### 3. 配置并运行
@@ -214,7 +211,15 @@ spring-boot-aurora-mysql-test/
 
 ```bash
 cd cloudformation
+
+# 删除最后部署的 stack
 ./deploy.sh delete
+
+# 或删除指定的 stack
+STACK_NAME=aurora-bg-test-0204-1530 ./deploy.sh delete
+
+# 列出所有 stacks 查找要删除的
+./deploy.sh list
 ```
 
 ⚠️ **测试完成后请及时删除资源，避免产生费用！**

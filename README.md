@@ -41,22 +41,19 @@ If you don't have an Aurora cluster, use CloudFormation to create one:
 ```bash
 cd cloudformation
 
-# Option 1: Use environment variables (recommended for one-time use)
+# Deploy creates a NEW stack each time with timestamp (e.g., aurora-bg-test-0204-1530)
 DB_PASSWORD=YourPassword123 ./deploy.sh deploy
 
-# Option 2: Use config file (recommended for repeated use)
-cp config.env config.local.env
-# Edit config.local.env and set DB_PASSWORD
-./deploy.sh deploy
+# Subsequent commands auto-use the last deployed stack
+./deploy.sh init-db              # Initialize database
+./deploy.sh create-bluegreen     # Create Blue/Green deployment (~20-30 min)
+./deploy.sh outputs              # Get connection info
 
-# Initialize database (create test users and tables)
-DB_PASSWORD=YourPassword123 ./deploy.sh init-db
+# List all stacks
+./deploy.sh list
 
-# Create Blue/Green deployment (~20-30 minutes)
-./deploy.sh create-bluegreen
-
-# Get connection info
-./deploy.sh outputs
+# Use specific stack
+STACK_NAME=aurora-bg-test-0204-1530 ./deploy.sh outputs
 ```
 
 ### 3. Configure and Run
@@ -215,7 +212,15 @@ spring-boot-aurora-mysql-test/
 
 ```bash
 cd cloudformation
+
+# Delete last deployed stack
 ./deploy.sh delete
+
+# Or delete specific stack
+STACK_NAME=aurora-bg-test-0204-1530 ./deploy.sh delete
+
+# List all stacks to find ones to delete
+./deploy.sh list
 ```
 
 ⚠️ **Remember to delete resources after testing to avoid charges!**

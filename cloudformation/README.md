@@ -12,9 +12,11 @@ cp config.env config.local.env
 # Edit config.local.env to set parameters
 
 # 2. Deploy clusters (~15-20 minutes)
+# Each deploy creates a NEW stack with timestamp (e.g., aurora-bg-test-0204-1530)
 DB_PASSWORD=YourPassword123 ./deploy.sh deploy
 
 # 3. Initialize database (create test users)
+# Automatically uses the last deployed stack
 ./deploy.sh init-db
 
 # 4. Create Blue/Green deployment (~20-30 minutes)
@@ -22,6 +24,21 @@ DB_PASSWORD=YourPassword123 ./deploy.sh deploy
 
 # 5. Check status
 ./deploy.sh status
+
+# 6. List all stacks
+./deploy.sh list
+```
+
+## Stack Naming
+
+By default, each `deploy` command creates a **new stack** with a unique timestamp:
+- Stack name format: `aurora-bg-test-MMDD-HHMM` (e.g., `aurora-bg-test-0204-1530`)
+- Subsequent commands (`init-db`, `outputs`, etc.) automatically use the last deployed stack
+- Use `./deploy.sh list` to see all created stacks
+
+To update an existing stack instead of creating a new one:
+```bash
+NEW_STACK=false STACK_NAME=aurora-bg-test-0204-1530 DB_PASSWORD=MyPass ./deploy.sh deploy
 ```
 
 ## Configuration File
@@ -34,6 +51,7 @@ CLUSTER_COUNT=1               # Number of clusters (1-3)
 INSTANCES_PER_CLUSTER=2       # Instances per cluster (1-3)
 ENGINE_VERSION=8.0.mysql_aurora.3.04.2    # Blue version
 TARGET_VERSION=8.0.mysql_aurora.3.10.3    # Green target version
+NEW_STACK=true                # true=create new stack, false=update existing
 
 # Database
 DB_PASSWORD=YourPassword      # Required
@@ -49,8 +67,23 @@ VPC_ID=                       # Leave empty for auto-detection
 ## Command Line Examples
 
 ```bash
-# Single cluster (default)
+# Create new cluster (default behavior)
 DB_PASSWORD=MyPass ./deploy.sh deploy
+# Creates: aurora-bg-test-0204-1530
+
+# Subsequent commands auto-use last deployed stack
+./deploy.sh init-db
+./deploy.sh outputs
+./deploy.sh create-bluegreen
+
+# List all stacks
+./deploy.sh list
+
+# Use specific stack
+STACK_NAME=aurora-bg-test-0204-1530 ./deploy.sh outputs
+
+# Update existing stack (instead of creating new)
+NEW_STACK=false STACK_NAME=aurora-bg-test-0204-1530 DB_PASSWORD=MyPass ./deploy.sh deploy
 
 # 2 clusters
 CLUSTER_COUNT=2 DB_PASSWORD=MyPass ./deploy.sh deploy
@@ -66,13 +99,24 @@ ENGINE_VERSION=8.0.mysql_aurora.3.08.0 DB_PASSWORD=MyPass ./deploy.sh deploy
 
 | Command | Description |
 |---------|-------------|
-| `deploy` | Deploy Aurora clusters |
+| `deploy` | Deploy Aurora clusters (creates NEW stack by default) |
 | `init-db` | Initialize database, create test users |
 | `create-bluegreen` | Create Blue/Green deployment |
 | `status` | View deployment status |
 | `outputs` | Show connection information |
+| `list` | List all aurora-bg-test stacks |
 | `show-config` | Show current configuration |
 | `delete` | Delete all resources |
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `NEW_STACK` | true | Create new stack with timestamp |
+| `STACK_NAME` | aurora-bg-test | Stack name (auto-generated if NEW_STACK=true) |
+| `DB_PASSWORD` | - | Database password (required) |
+| `CLUSTER_COUNT` | 1 | Number of clusters (1-3) |
+| `INSTANCES_PER_CLUSTER` | 2 | Instances per cluster |
 
 ## Test Users
 

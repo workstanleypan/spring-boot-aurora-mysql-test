@@ -12,9 +12,11 @@ cp config.env config.local.env
 # 编辑 config.local.env 设置参数
 
 # 2. 部署集群 (~15-20 分钟)
+# 每次部署会创建新的 stack，名称带时间戳（如 aurora-bg-test-0204-1530）
 DB_PASSWORD=YourPassword123 ./deploy.sh deploy
 
 # 3. 初始化数据库（创建测试用户）
+# 自动使用最后部署的 stack
 ./deploy.sh init-db
 
 # 4. 创建蓝绿部署 (~20-30 分钟)
@@ -22,6 +24,21 @@ DB_PASSWORD=YourPassword123 ./deploy.sh deploy
 
 # 5. 查看状态
 ./deploy.sh status
+
+# 6. 列出所有 stacks
+./deploy.sh list
+```
+
+## Stack 命名
+
+默认情况下，每次 `deploy` 命令会创建一个**新的 stack**，带有唯一时间戳：
+- Stack 名称格式：`aurora-bg-test-MMDD-HHMM`（如 `aurora-bg-test-0204-1530`）
+- 后续命令（`init-db`、`outputs` 等）会自动使用最后部署的 stack
+- 使用 `./deploy.sh list` 查看所有已创建的 stacks
+
+如果要更新现有 stack 而不是创建新的：
+```bash
+NEW_STACK=false STACK_NAME=aurora-bg-test-0204-1530 DB_PASSWORD=MyPass ./deploy.sh deploy
 ```
 
 ## 配置文件
@@ -34,6 +51,7 @@ CLUSTER_COUNT=1               # 集群数量 (1-3)
 INSTANCES_PER_CLUSTER=2       # 每集群实例数 (1-3)
 ENGINE_VERSION=8.0.mysql_aurora.3.04.2    # Blue 版本
 TARGET_VERSION=8.0.mysql_aurora.3.10.3    # Green 目标版本
+NEW_STACK=true                # true=创建新 stack，false=更新现有
 
 # 数据库
 DB_PASSWORD=YourPassword      # 必填
@@ -49,8 +67,23 @@ VPC_ID=                       # 留空自动检测
 ## 命令行示例
 
 ```bash
-# 单集群（默认）
+# 创建新集群（默认行为）
 DB_PASSWORD=MyPass ./deploy.sh deploy
+# 创建: aurora-bg-test-0204-1530
+
+# 后续命令自动使用最后部署的 stack
+./deploy.sh init-db
+./deploy.sh outputs
+./deploy.sh create-bluegreen
+
+# 列出所有 stacks
+./deploy.sh list
+
+# 使用指定的 stack
+STACK_NAME=aurora-bg-test-0204-1530 ./deploy.sh outputs
+
+# 更新现有 stack（而不是创建新的）
+NEW_STACK=false STACK_NAME=aurora-bg-test-0204-1530 DB_PASSWORD=MyPass ./deploy.sh deploy
 
 # 2 个集群
 CLUSTER_COUNT=2 DB_PASSWORD=MyPass ./deploy.sh deploy
@@ -66,13 +99,24 @@ ENGINE_VERSION=8.0.mysql_aurora.3.08.0 DB_PASSWORD=MyPass ./deploy.sh deploy
 
 | 命令 | 说明 |
 |------|------|
-| `deploy` | 部署 Aurora 集群 |
+| `deploy` | 部署 Aurora 集群（默认创建新 stack） |
 | `init-db` | 初始化数据库，创建测试用户 |
 | `create-bluegreen` | 创建蓝绿部署 |
 | `status` | 查看部署状态 |
 | `outputs` | 显示连接信息 |
+| `list` | 列出所有 aurora-bg-test stacks |
 | `show-config` | 显示当前配置 |
 | `delete` | 删除所有资源 |
+
+## 环境变量
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `NEW_STACK` | true | 创建带时间戳的新 stack |
+| `STACK_NAME` | aurora-bg-test | Stack 名称（NEW_STACK=true 时自动生成） |
+| `DB_PASSWORD` | - | 数据库密码（必填） |
+| `CLUSTER_COUNT` | 1 | 集群数量 (1-3) |
+| `INSTANCES_PER_CLUSTER` | 2 | 每集群实例数 |
 
 ## 测试用户
 
