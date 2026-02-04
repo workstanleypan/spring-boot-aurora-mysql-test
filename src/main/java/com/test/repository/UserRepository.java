@@ -13,7 +13,7 @@ import java.util.List;
 
 /**
  * User Repository
- * 使用 JdbcTemplate 进行数据库操作
+ * Uses JdbcTemplate for database operations
  */
 @Repository
 public class UserRepository {
@@ -27,7 +27,7 @@ public class UserRepository {
     }
     
     /**
-     * 查询所有用户
+     * Find all users
      */
     public List<User> findAll() {
         String sql = "SELECT id, name, created_at FROM test_table";
@@ -36,7 +36,7 @@ public class UserRepository {
     }
     
     /**
-     * 根据 ID 查询用户
+     * Find user by ID
      */
     public User findById(Long id) {
         String sql = "SELECT id, name, created_at FROM test_table WHERE id = ?";
@@ -46,7 +46,7 @@ public class UserRepository {
     }
     
     /**
-     * 插入用户
+     * Insert user
      */
     public int insert(String name) {
         String sql = "INSERT INTO test_table (name) VALUES (?)";
@@ -55,7 +55,7 @@ public class UserRepository {
     }
     
     /**
-     * 更新用户
+     * Update user
      */
     public int update(Long id, String name) {
         String sql = "UPDATE test_table SET name = ? WHERE id = ?";
@@ -64,7 +64,7 @@ public class UserRepository {
     }
     
     /**
-     * 删除用户
+     * Delete user
      */
     public int delete(Long id) {
         String sql = "DELETE FROM test_table WHERE id = ?";
@@ -73,7 +73,7 @@ public class UserRepository {
     }
     
     /**
-     * 统计用户数量
+     * Count users
      */
     public long count() {
         String sql = "SELECT COUNT(*) FROM test_table";

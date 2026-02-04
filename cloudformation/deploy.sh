@@ -143,7 +143,7 @@ deploy_stack() {
             echo "  Found: $VPC_ID"
         fi
 
-        # 获取 VPC CIDR
+        # Get VPC CIDR
         if [ -z "$VPC_CIDR" ]; then
             VPC_CIDR=$(aws ec2 describe-vpcs \
                 --vpc-ids "$VPC_ID" \

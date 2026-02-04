@@ -3,7 +3,7 @@ package com.test.model;
 import java.time.LocalDateTime;
 
 /**
- * User 实体类
+ * User Entity
  */
 public class User {
     private Long id;

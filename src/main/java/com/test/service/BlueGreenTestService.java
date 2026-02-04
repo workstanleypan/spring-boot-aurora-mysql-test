@@ -345,7 +345,7 @@ public String startWriteOnlyTest(int numConnections, int writeIntervalMs) {
                 if (currentTime - lastReportTime >= 10000) {
                     long writesInPeriod = writeCount - lastReportCount;
                     double actualRate = writesInPeriod / ((currentTime - lastReportTime) / 1000.0);
-                    log.info("📊 [{}] Write-Thread-{}: {} 次写入, 速率: {}/sec, 延迟: {}ms",
+                    log.info("📊 [{}] Write-Thread-{}: {} writes, rate: {}/sec, latency: {}ms",
                         now(), threadId, writeCount, String.format("%.1f", actualRate), writeLatency);
                     lastReportTime = currentTime;
                     lastReportCount = writeCount;
