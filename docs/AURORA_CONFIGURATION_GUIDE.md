@@ -8,23 +8,10 @@
 
 ### 完整格式
 
-```
-jdbc:aws-wrapper:mysql://[红色:writer_cluster_endpoint]/[红色:database_name]?[绿色:characterEncoding=utf8]&[黄色:wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg]&[黄色:wrapperLoggerLevel=FINE]&[紫色:bgdId=clustername]
-```
-
 **实际示例:**
 ```
 jdbc:aws-wrapper:mysql://my-cluster.cluster-xxx.us-east-1.rds.amazonaws.com/testdb?characterEncoding=utf8&wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=FINE&bgdId=my-cluster
 ```
-
-### 参数说明
-
-| 颜色标记 | 参数 | 说明 |
-|----------|------|------|
-| 🔴 红色 | `writer_cluster_endpoint`, `database_name` | 根据业务修改的连接参数 |
-| 🟢 绿色 | `characterEncoding=utf8` | 原生 MySQL 连接参数 |
-| 🟡 黄色 | `wrapperPlugins=...`, `wrapperLoggerLevel=...` | **必备的 Wrapper 连接参数（重要）** |
-| 🟣 紫色 | `bgdId=clustername` | 多集群场景需要配置（见下文） |
 
 ### URL 各部分拆解
 
@@ -37,6 +24,15 @@ jdbc:aws-wrapper:mysql://
 ! &wrapperLoggerLevel=FINE         ← 🟡 日志级别（必需）
 # &bgdId=clustername               ← 🟣 集群标识（多集群时必需）
 ```
+
+### 参数说明
+
+| 颜色标记 | 参数 | 说明 |
+|----------|------|------|
+| 🔴 红色 | `writer_cluster_endpoint`, `database_name` | 根据业务修改的连接参数 |
+| 🟢 绿色 | `characterEncoding=utf8` | 原生 MySQL 连接参数 |
+| 🟡 黄色 | `wrapperPlugins=...`, `wrapperLoggerLevel=...` | **必备的 Wrapper 连接参数（重要）** |
+| 🟣 紫色 | `bgdId=clustername` | 多集群场景需要配置（见下文） |
 
 ### ⚠️ 重要注意事项
 
