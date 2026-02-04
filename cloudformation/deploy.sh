@@ -25,6 +25,7 @@ load_config() {
     local CLI_INSTANCES_PER_CLUSTER="${INSTANCES_PER_CLUSTER:-}"
     local CLI_ENGINE_VERSION="${ENGINE_VERSION:-}"
     local CLI_TARGET_VERSION="${TARGET_VERSION:-}"
+    local CLI_NEW_STACK="${NEW_STACK:-}"
     
     # Load config file
     if [ -f "$SCRIPT_DIR/config.local.env" ]; then
@@ -47,6 +48,7 @@ load_config() {
     [ -n "$CLI_INSTANCES_PER_CLUSTER" ] && INSTANCES_PER_CLUSTER="$CLI_INSTANCES_PER_CLUSTER"
     [ -n "$CLI_ENGINE_VERSION" ] && ENGINE_VERSION="$CLI_ENGINE_VERSION"
     [ -n "$CLI_TARGET_VERSION" ] && TARGET_VERSION="$CLI_TARGET_VERSION"
+    [ -n "$CLI_NEW_STACK" ] && NEW_STACK="$CLI_NEW_STACK"
 
     # Set defaults for any remaining empty values
     STACK_NAME="${STACK_NAME:-aurora-bg-test}"
@@ -64,6 +66,9 @@ load_config() {
     INSTANCES_PER_CLUSTER="${INSTANCES_PER_CLUSTER:-2}"
     ENGINE_VERSION="${ENGINE_VERSION:-8.0.mysql_aurora.3.04.2}"
     TARGET_VERSION="${TARGET_VERSION:-8.0.mysql_aurora.3.10.3}"
+    
+    # New stack mode: always create new cluster (default: true)
+    NEW_STACK="${NEW_STACK:-true}"
 }
 
 #==============================================================================
@@ -73,22 +78,36 @@ usage() {
     echo "Usage: $0 <command>"
     echo ""
     echo "Commands:"
-    echo "  deploy              Deploy Aurora clusters"
+    echo "  deploy              Deploy Aurora clusters (creates NEW stack by default)"
     echo "  init-db             Initialize database (create test users)"
     echo "  create-bluegreen    Create Blue/Green deployments"
     echo "  status              Show status"
     echo "  outputs             Show stack outputs"
+    echo "  list                List all aurora-bg-test stacks"
     echo "  delete              Delete everything"
     echo "  show-config         Show current configuration"
     echo ""
     echo "Workflow:"
-    echo "  1. ./deploy.sh deploy           # Create clusters"
+    echo "  1. ./deploy.sh deploy           # Create NEW cluster (with timestamp)"
     echo "  2. ./deploy.sh init-db          # Create test users"
     echo "  3. ./deploy.sh create-bluegreen # Start Blue/Green"
     echo ""
     echo "Examples:"
+    echo "  # Create new cluster (default behavior)"
     echo "  DB_PASSWORD=MyPass ./deploy.sh deploy"
-    echo "  CLUSTER_COUNT=2 DB_PASSWORD=MyPass ./deploy.sh deploy"
+    echo ""
+    echo "  # Update existing cluster (set NEW_STACK=false)"
+    echo "  NEW_STACK=false STACK_NAME=aurora-bg-test-0204 DB_PASSWORD=MyPass ./deploy.sh deploy"
+    echo ""
+    echo "  # Use specific stack for other commands"
+    echo "  STACK_NAME=aurora-bg-test-0204-1530 ./deploy.sh init-db"
+    echo "  STACK_NAME=aurora-bg-test-0204-1530 ./deploy.sh outputs"
+    echo ""
+    echo "Environment Variables:"
+    echo "  NEW_STACK=true|false   Create new stack (default: true)"
+    echo "  STACK_NAME=xxx         Stack name (auto-generated if NEW_STACK=true)"
+    echo "  DB_PASSWORD=xxx        Database password (required)"
+    echo "  CLUSTER_COUNT=1-3      Number of clusters"
 }
 
 show_config() {
@@ -100,6 +119,7 @@ show_config() {
     echo "╚══════════════════════════════════════════════════════════════╝"
     echo ""
     echo "Stack:           $STACK_NAME"
+    echo "New Stack Mode:  $NEW_STACK"
     echo "Region:          $REGION"
     echo ""
     echo "Clusters:        $CLUSTER_COUNT"
@@ -125,10 +145,22 @@ show_config() {
 deploy_stack() {
     load_config
     
+    # Generate unique stack name with timestamp if NEW_STACK=true
+    if [ "$NEW_STACK" = "true" ]; then
+        TIMESTAMP=$(date +%m%d-%H%M)
+        STACK_NAME="aurora-bg-test-${TIMESTAMP}"
+        echo -e "${GREEN}Creating NEW stack: $STACK_NAME${NC}"
+    fi
+    
+    # Save stack name to file for subsequent commands
+    echo "$STACK_NAME" > "$SCRIPT_DIR/.last-stack-name"
+    
     echo ""
     echo "╔══════════════════════════════════════════════════════════════╗"
     echo "║   Deploying Aurora MySQL Clusters                           ║"
     echo "╚══════════════════════════════════════════════════════════════╝"
+    echo ""
+    echo -e "${CYAN}Stack Name: $STACK_NAME${NC}"
     echo ""
     
     if [ -z "$DB_PASSWORD" ]; then
@@ -187,6 +219,7 @@ deploy_stack() {
 
     echo ""
     echo "Deploying:"
+    echo "  Stack:        $STACK_NAME"
     echo "  Clusters:     $CLUSTER_COUNT"
     echo "  Instances:    $INSTANCES_PER_CLUSTER per cluster"
     echo "  Version:      $ENGINE_VERSION"
@@ -217,6 +250,11 @@ deploy_stack() {
     echo ""
     echo -e "${GREEN}✅ Deployment complete!${NC}"
     echo ""
+    echo -e "${YELLOW}📝 To use this stack for subsequent commands:${NC}"
+    echo "   export STACK_NAME=$STACK_NAME"
+    echo "   # or"
+    echo "   STACK_NAME=$STACK_NAME ./deploy.sh init-db"
+    echo ""
     show_outputs
 }
 
@@ -225,11 +263,14 @@ deploy_stack() {
 #==============================================================================
 init_db() {
     load_config
+    resolve_stack_name
     
     echo ""
     echo "╔══════════════════════════════════════════════════════════════╗"
     echo "║   Initializing Database                                     ║"
     echo "╚══════════════════════════════════════════════════════════════╝"
+    echo ""
+    echo -e "${CYAN}Stack Name: $STACK_NAME${NC}"
     echo ""
 
     # Get cluster endpoint
@@ -282,12 +323,14 @@ init_db() {
 #==============================================================================
 create_bluegreen() {
     load_config
+    resolve_stack_name
     
     echo ""
     echo "╔══════════════════════════════════════════════════════════════╗"
     echo "║   Creating Blue/Green Deployments                           ║"
     echo "╚══════════════════════════════════════════════════════════════╝"
     echo ""
+    echo -e "${CYAN}Stack Name: $STACK_NAME${NC}"
     echo "Target Version: $TARGET_VERSION"
     echo ""
 
@@ -339,6 +382,7 @@ create_bluegreen() {
 #==============================================================================
 show_status() {
     load_config
+    resolve_stack_name
     
     echo ""
     echo "Stack: $STACK_NAME"
@@ -370,7 +414,11 @@ show_status() {
 
 show_outputs() {
     load_config
+    resolve_stack_name
     
+    echo ""
+    echo -e "${CYAN}Stack: $STACK_NAME${NC}"
+    echo ""
     aws cloudformation describe-stacks \
         --stack-name "$STACK_NAME" \
         --query 'Stacks[0].Outputs[*].[OutputKey, OutputValue]' \
@@ -379,10 +427,39 @@ show_outputs() {
 }
 
 #==============================================================================
+# List all stacks
+#==============================================================================
+list_stacks() {
+    load_config
+    
+    echo ""
+    echo "╔══════════════════════════════════════════════════════════════╗"
+    echo "║   Aurora Blue/Green Test Stacks                             ║"
+    echo "╚══════════════════════════════════════════════════════════════╝"
+    echo ""
+    
+    # Show last used stack
+    if [ -f "$SCRIPT_DIR/.last-stack-name" ]; then
+        LAST_STACK=$(cat "$SCRIPT_DIR/.last-stack-name")
+        echo -e "${GREEN}Last deployed: $LAST_STACK${NC}"
+        echo ""
+    fi
+    
+    echo "All aurora-bg-test stacks:"
+    aws cloudformation list-stacks \
+        --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE CREATE_IN_PROGRESS UPDATE_IN_PROGRESS \
+        --query "StackSummaries[?contains(StackName, \`aurora-bg-test\`)].[StackName, StackStatus, CreationTime]" \
+        --output table \
+        --region "$REGION" 2>/dev/null || echo "  None found"
+    echo ""
+}
+
+#==============================================================================
 # Delete
 #==============================================================================
 delete_all() {
     load_config
+    resolve_stack_name
     
     echo -e "${YELLOW}⚠️  Delete all resources for: $STACK_NAME${NC}"
     read -p "Are you sure? (yes/no): " confirm
@@ -405,7 +482,26 @@ delete_all() {
     aws cloudformation delete-stack --stack-name "$STACK_NAME" --region "$REGION"
     aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" --region "$REGION" || true
 
+    # Clear last stack name if it matches
+    if [ -f "$SCRIPT_DIR/.last-stack-name" ]; then
+        LAST_STACK=$(cat "$SCRIPT_DIR/.last-stack-name")
+        if [ "$LAST_STACK" = "$STACK_NAME" ]; then
+            rm -f "$SCRIPT_DIR/.last-stack-name"
+        fi
+    fi
+
     echo -e "${GREEN}✅ Deleted!${NC}"
+}
+
+#==============================================================================
+# Resolve stack name (use last deployed if not specified)
+#==============================================================================
+resolve_stack_name() {
+    # If STACK_NAME is still default and we have a last-stack-name file, use it
+    if [ "$STACK_NAME" = "aurora-bg-test" ] && [ -f "$SCRIPT_DIR/.last-stack-name" ]; then
+        STACK_NAME=$(cat "$SCRIPT_DIR/.last-stack-name")
+        echo -e "${CYAN}Using last deployed stack: $STACK_NAME${NC}"
+    fi
 }
 
 #==============================================================================
@@ -417,6 +513,7 @@ case "${1:-}" in
     create-bluegreen) create_bluegreen ;;
     status) show_status ;;
     outputs) show_outputs ;;
+    list) list_stacks ;;
     delete) delete_all ;;
     show-config) show_config ;;
     *) usage; exit 1 ;;

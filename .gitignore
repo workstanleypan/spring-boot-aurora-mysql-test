@@ -37,3 +37,4 @@ Thumbs.db
 mvnw
 mvnw.cmd
 cloudformation/config.local.env
+cloudformation/.last-stack-name
