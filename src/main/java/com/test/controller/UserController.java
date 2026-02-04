@@ -16,7 +16,7 @@ import java.util.Map;
 
 /**
  * User REST Controller
- * 提供 RESTful API
+ * Provides RESTful API
  */
 @RestController
 @RequestMapping("/api")
@@ -33,7 +33,7 @@ public class UserController {
     }
     
     /**
-     * 测试端点 - 验证数据库连接
+     * Test endpoint - verify database connection
      */
     @GetMapping("/test")
     public ResponseEntity<Map<String, Object>> test() {
@@ -64,7 +64,7 @@ public class UserController {
     }
     
     /**
-     * 获取所有用户
+     * Get all users
      */
     @GetMapping("/users")
     public ResponseEntity<List<User>> getAllUsers() {
@@ -74,7 +74,7 @@ public class UserController {
     }
     
     /**
-     * 根据 ID 获取用户
+     * Get user by ID
      */
     @GetMapping("/users/{id}")
     public ResponseEntity<User> getUserById(@PathVariable Long id) {
@@ -87,7 +87,7 @@ public class UserController {
     }
     
     /**
-     * 创建用户
+     * Create user
      */
     @PostMapping("/users")
     public ResponseEntity<Map<String, Object>> createUser(@RequestBody Map<String, String> request) {
@@ -106,7 +106,7 @@ public class UserController {
     }
     
     /**
-     * 更新用户
+     * Update user
      */
     @PutMapping("/users/{id}")
     public ResponseEntity<Map<String, Object>> updateUser(
@@ -127,7 +127,7 @@ public class UserController {
     }
     
     /**
-     * 删除用户
+     * Delete user
      */
     @DeleteMapping("/users/{id}")
     public ResponseEntity<Map<String, Object>> deleteUser(@PathVariable Long id) {
@@ -140,7 +140,7 @@ public class UserController {
     }
     
     /**
-     * 获取用户统计
+     * Get user statistics
      */
     @GetMapping("/users/stats")
     public ResponseEntity<Map<String, Object>> getUserStats() {

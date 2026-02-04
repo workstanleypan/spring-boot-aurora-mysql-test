@@ -17,13 +17,14 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * Blue/Green Switchover Test Service
  * 
- * 模拟多线程元数据读取行为，用于测试 AWS JDBC Wrapper 在蓝绿切换时的表现
- * 参考 MultiThreadBlueGreenTestWithUnifiedLogging.java 实现
+ * Simulates multi-threaded metadata read behavior for testing AWS JDBC Wrapper 
+ * during Blue/Green switchover.
+ * Reference: MultiThreadBlueGreenTestWithUnifiedLogging.java
  * 
  * Test Scenario:
- * - 多线程持续元数据读取（高频率）
- * - 测试在 Blue/Green switchover 期间的连接稳定性
- * - 监控 failover 事件和连接状态变化
+ * - Multi-threaded continuous metadata reads (high frequency)
+ * - Tests connection stability during Blue/Green switchover
+ * - Monitors failover events and connection state changes
  */
 @Service
 public class BlueGreenTestService {
@@ -210,14 +211,14 @@ public class BlueGreenTestService {
     }
     
     /**
-     * 启动简化版持续写入测试
-     * 每个线程持有一个连接，持续写入，不释放连接
-     * 
-     * @param numConnections 连接数量（每个连接一个线程）
-     * @param writeIntervalMs 写入间隔（毫秒），0表示尽可能快
-     * @return Test ID
-     */
-    public String startWriteOnlyTest(int numConnections, int writeIntervalMs) {
+ * Start simplified continuous write test
+ * Each thread holds one connection and writes continuously without releasing
+ * 
+ * @param numConnections Number of connections (one thread per connection)
+ * @param writeIntervalMs Write interval in milliseconds, 0 means as fast as possible
+ * @return Test ID
+ */
+public String startWriteOnlyTest(int numConnections, int writeIntervalMs) {
         if (testRunning.get()) {
             throw new IllegalStateException("Test is already running");
         }
@@ -232,20 +233,20 @@ public class BlueGreenTestService {
         String testId = "WRITE-" + testStartTime;
         
         log.info("╔════════════════════════════════════════════════════════════════╗");
-        log.info("║   持续写入测试 - 每线程独占连接                                ║");
+        log.info("║   Continuous Write Test - Persistent Connection Per Thread    ║");
         log.info("╚════════════════════════════════════════════════════════════════╝");
         log.info("");
-        log.info("📋 配置:");
+        log.info("📋 Configuration:");
         log.info("   Test ID: {}", testId);
-        log.info("   连接数量: {}", numConnections);
-        log.info("   写入间隔: {}ms", writeIntervalMs);
-        log.info("   模式: 每线程持有一个连接，持续写入");
+        log.info("   Connections: {}", numConnections);
+        log.info("   Write Interval: {}ms", writeIntervalMs);
+        log.info("   Mode: Each thread holds one connection, continuous writes");
         log.info("");
         
         executor = Executors.newFixedThreadPool(numConnections + 1);
         CountDownLatch startLatch = new CountDownLatch(1);
         
-        // 启动写入线程
+        // Start write threads
         for (int i = 1; i <= numConnections; i++) {
             final int threadId = i;
             executor.submit(() -> {
@@ -258,7 +259,7 @@ public class BlueGreenTestService {
             });
         }
         
-        // 启动监控线程
+        // Start monitoring thread
         executor.submit(() -> {
             try {
                 startLatch.await();
@@ -268,42 +269,42 @@ public class BlueGreenTestService {
             }
         });
         
-        log.info("🚀 [{}] 启动 {} 个写入线程...", now(), numConnections);
+        log.info("🚀 [{}] Starting {} write threads...", now(), numConnections);
         startLatch.countDown();
         
         return testId;
     }
     
     /**
-     * 持久连接写入线程 - 持有连接不释放，持续写入
+     * Persistent connection write thread - holds connection without releasing, continuous writes
      */
     private void runPersistentWriteThread(int threadId, int writeIntervalMs) {
-        log.info("✍️  [{}] Write-Thread-{}: 启动持续写入...", now(), threadId);
+        log.info("✍️  [{}] Write-Thread-{}: Starting continuous writes...", now(), threadId);
         
         Connection conn = null;
         String tableName = "bg_write_test";
         
         try {
-            // 获取连接并持有
+            // Get and hold connection
             conn = dataSource.getConnection();
             String endpoint = getEndpointInfo(conn);
             lastEndpoint = endpoint;
             
-            log.info("✅ [{}] Write-Thread-{} 获得连接: {}", now(), threadId, endpoint);
+            log.info("✅ [{}] Write-Thread-{} got connection: {}", now(), threadId, endpoint);
             
-            // 创建测试表（如果不存在）
+            // Create test table if not exists
             ensureTestTable(conn, tableName);
             
             long writeCount = 0;
             long lastReportTime = System.currentTimeMillis();
             long lastReportCount = 0;
             
-            // 持续写入直到测试停止
+            // Continuous writes until test stops
             while (testRunning.get()) {
                 long writeStart = System.nanoTime();
                 
                 try {
-                    // 执行写入
+                    // Execute write
                     String sql = "INSERT INTO " + tableName + 
                         " (thread_id, endpoint, write_time, data) VALUES (?, ?, NOW(), ?)";
                     try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -321,14 +322,14 @@ public class BlueGreenTestService {
                     String msg = e.getMessage().toLowerCase();
                     if (msg.contains("read-only") || msg.contains("read only")) {
                         readOnlyErrors.incrementAndGet();
-                        log.warn("⚠️  [{}] Write-Thread-{}: READ-ONLY 错误 - {}", 
+                        log.warn("⚠️  [{}] Write-Thread-{}: READ-ONLY error - {}", 
                             now(), threadId, e.getMessage());
                     } else if (msg.contains("failover") || msg.contains("connection")) {
                         failoverCount.incrementAndGet();
-                        log.error("🔄 [{}] Write-Thread-{}: FAILOVER 检测 - {}", 
+                        log.error("🔄 [{}] Write-Thread-{}: FAILOVER detected - {}", 
                             now(), threadId, e.getMessage());
                     } else {
-                        log.error("❌ [{}] Write-Thread-{}: 写入失败 - {}", 
+                        log.error("❌ [{}] Write-Thread-{}: Write failed - {}", 
                             now(), threadId, e.getMessage());
                     }
                 }
@@ -339,7 +340,7 @@ public class BlueGreenTestService {
                 long writeLatency = (System.nanoTime() - writeStart) / 1_000_000;
                 totalWriteLatency.addAndGet(writeLatency);
                 
-                // 每10秒报告一次
+                // Report every 10 seconds
                 long currentTime = System.currentTimeMillis();
                 if (currentTime - lastReportTime >= 10000) {
                     long writesInPeriod = writeCount - lastReportCount;
@@ -350,7 +351,7 @@ public class BlueGreenTestService {
                     lastReportCount = writeCount;
                 }
                 
-                // 写入间隔
+                // Write interval
                 if (writeIntervalMs > 0) {
                     try {
                         Thread.sleep(writeIntervalMs);
@@ -361,16 +362,16 @@ public class BlueGreenTestService {
                 }
             }
             
-            log.info("✅ [{}] Write-Thread-{}: 完成 {} 次写入", now(), threadId, writeCount);
+            log.info("✅ [{}] Write-Thread-{}: Completed {} writes", now(), threadId, writeCount);
             
         } catch (SQLException e) {
-            log.error("❌ [{}] Write-Thread-{} 连接错误: {}", now(), threadId, e.getMessage());
+            log.error("❌ [{}] Write-Thread-{} connection error: {}", now(), threadId, e.getMessage());
         } finally {
-            // 测试结束时才关闭连接
+            // Close connection only when test ends
             if (conn != null) {
                 try {
                     conn.close();
-                    log.info("🔌 [{}] Write-Thread-{} 连接已关闭", now(), threadId);
+                    log.info("🔌 [{}] Write-Thread-{} connection closed", now(), threadId);
                 } catch (SQLException e) {
                     // Ignore
                 }
@@ -379,7 +380,7 @@ public class BlueGreenTestService {
     }
     
     /**
-     * 确保测试表存在
+     * Ensure test table exists
      */
     private void ensureTestTable(Connection conn, String tableName) {
         String sql = "CREATE TABLE IF NOT EXISTS " + tableName + " (" +
@@ -394,21 +395,21 @@ public class BlueGreenTestService {
         
         try (Statement stmt = conn.createStatement()) {
             stmt.execute(sql);
-            log.info("✅ 测试表 {} 已就绪", tableName);
+            log.info("✅ Test table {} ready", tableName);
         } catch (SQLException e) {
-            log.warn("⚠️  创建表失败 (可能已存在): {}", e.getMessage());
+            log.warn("⚠️  Failed to create table (may already exist): {}", e.getMessage());
         }
     }
     
     /**
-     * 简化版监控线程
+     * Simple monitoring thread
      */
     private void runSimpleMonitoringThread() {
-        log.info("📊 [{}] 监控线程启动", now());
+        log.info("📊 [{}] Monitoring thread started", now());
         
         while (testRunning.get()) {
             try {
-                Thread.sleep(30000); // 每30秒报告一次
+                Thread.sleep(30000); // Report every 30 seconds
                 
                 long total = totalWrites.get();
                 long success = successfulWrites.get();
@@ -418,12 +419,12 @@ public class BlueGreenTestService {
                 double successRate = total > 0 ? (success * 100.0 / total) : 0;
                 
                 log.info("╔════════════════════════════════════════════════════════════════╗");
-                log.info("║  [{}] 写入测试状态报告                                  ║", now());
+                log.info("║  [{}] Write Test Status Report                          ║", now());
                 log.info("╠════════════════════════════════════════════════════════════════╣");
-                log.info("║  总写入: {:,}  成功: {:,}  失败: {:,}", total, success, failed);
-                log.info("║  成功率: {:.2f}%", successRate);
-                log.info("║  Read-Only 错误: {}  Failover 次数: {}", readOnly, failovers);
-                log.info("║  最后连接: {}", lastEndpoint);
+                log.info("║  Total Writes: {:,}  Success: {:,}  Failed: {:,}", total, success, failed);
+                log.info("║  Success Rate: {:.2f}%", successRate);
+                log.info("║  Read-Only Errors: {}  Failover Count: {}", readOnly, failovers);
+                log.info("║  Last Connection: {}", lastEndpoint);
                 log.info("╚════════════════════════════════════════════════════════════════╝");
                 
             } catch (InterruptedException e) {
@@ -465,7 +466,7 @@ public class BlueGreenTestService {
     }
 
     /**
-     * Metadata read thread - 持续读取数据库元数据
+     * Metadata read thread - continuously reads database metadata
      */
     private void runMetadataReadThread(int threadId, int readsPerSecond, int durationSeconds) {
         int readIntervalMs = 1000 / readsPerSecond;
@@ -576,7 +577,7 @@ public class BlueGreenTestService {
     }
     
     /**
-     * Write thread - 持续写入数据库
+     * Write thread - continuously writes to database
      */
     private void runWriteThread(int threadId, int writesPerSecond, int durationSeconds) {
         int writeIntervalMs = 1000 / writesPerSecond;
@@ -836,7 +837,7 @@ public class BlueGreenTestService {
     }
     
     /**
-     * Monitoring thread - 定期报告测试状态
+     * Monitoring thread - periodically reports test status
      */
     private void runMonitoringThread(int durationSeconds) {
         boolean isContinuous = continuousMode.get();

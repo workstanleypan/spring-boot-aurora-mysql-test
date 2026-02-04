@@ -12,7 +12,7 @@ import java.util.Map;
 /**
  * Blue/Green Switchover Test Controller
  * 
- * 提供 REST API 来控制和监控蓝绿切换测试
+ * Provides REST API to control and monitor Blue/Green switchover tests
  */
 @RestController
 @RequestMapping("/api/bluegreen")
@@ -27,15 +27,15 @@ public class BlueGreenTestController {
     }
     
     /**
-     * 启动蓝绿切换测试
+     * Start Blue/Green switchover test
      * 
-     * @param request 包含测试参数的请求体
-     *                - numThreads: 线程数 (默认: 20)
-     *                - readsPerSecond: 每线程每秒读取次数 (默认: 500)
-     *                - writesPerSecond: 每线程每秒写入次数 (默认: 10)
-     *                - durationSeconds: 测试持续时间(秒) (默认: 3600, 0 = 持续模式)
-     *                - enableWrites: 是否启用写入 (默认: true)
-     * @return 测试ID和配置信息
+     * @param request Request body containing test parameters
+     *                - numThreads: Number of threads (default: 20)
+     *                - readsPerSecond: Reads per second per thread (default: 500)
+     *                - writesPerSecond: Writes per second per thread (default: 10)
+     *                - durationSeconds: Test duration in seconds (default: 3600, 0 = continuous mode)
+     *                - enableWrites: Enable write operations (default: true)
+     * @return Test ID and configuration info
      */
     @PostMapping("/start")
     public ResponseEntity<Map<String, Object>> startTest(@RequestBody(required = false) Map<String, Object> request) {
@@ -121,7 +121,7 @@ public class BlueGreenTestController {
     }
     
     /**
-     * 停止当前运行的测试
+     * Stop the currently running test
      */
     @PostMapping("/stop")
     public ResponseEntity<Map<String, Object>> stopTest() {
@@ -146,7 +146,7 @@ public class BlueGreenTestController {
     }
     
     /**
-     * 获取当前测试状态
+     * Get current test status
      */
     @GetMapping("/status")
     public ResponseEntity<Map<String, Object>> getStatus() {
@@ -212,7 +212,7 @@ public class BlueGreenTestController {
     }
     
     /**
-     * 快速启动测试 - 使用默认参数
+     * Quick start test - uses default parameters
      */
     @PostMapping("/quick-start")
     public ResponseEntity<Map<String, Object>> quickStart() {
@@ -221,7 +221,7 @@ public class BlueGreenTestController {
     }
     
     /**
-     * 启动短时测试 - 用于快速验证
+     * Start short test - for quick verification
      */
     @PostMapping("/quick-test")
     public ResponseEntity<Map<String, Object>> quickTest() {
@@ -236,7 +236,7 @@ public class BlueGreenTestController {
     }
     
     /**
-     * 启动持续测试 - 无限期运行直到手动停止
+     * Start continuous test - runs indefinitely until manually stopped
      */
     @PostMapping("/start-continuous")
     public ResponseEntity<Map<String, Object>> startContinuous(@RequestBody(required = false) Map<String, Object> request) {
@@ -261,10 +261,10 @@ public class BlueGreenTestController {
     }
     
     /**
-     * 启动持续写入测试 - 每线程独占一个连接，持续写入
+     * Start continuous write test - each thread holds one connection, continuous writes
      * 
-     * @param numConnections 连接数量（默认: 10）
-     * @param writeIntervalMs 写入间隔毫秒（默认: 100，即每秒10次）
+     * @param numConnections Number of connections (default: 10)
+     * @param writeIntervalMs Write interval in milliseconds (default: 100, i.e., 10 writes/sec)
      */
     @PostMapping("/start-write")
     public ResponseEntity<Map<String, Object>> startWriteTest(
@@ -298,7 +298,7 @@ public class BlueGreenTestController {
                 "writesPerSecondPerThread", writeIntervalMs > 0 ? 1000 / writeIntervalMs : "max",
                 "mode", "persistent_connection_write"
             ));
-            response.put("message", "持续写入测试已启动 - 每线程独占一个连接");
+            response.put("message", "Continuous write test started - each thread holds one connection");
             
             log.info("✅ Write test started: {}", testId);
             return ResponseEntity.ok(response);
@@ -317,28 +317,28 @@ public class BlueGreenTestController {
     }
     
     /**
-     * 获取测试帮助信息
+     * Get test help information
      */
     @GetMapping("/help")
     public ResponseEntity<Map<String, Object>> getHelp() {
         Map<String, Object> help = new HashMap<>();
         
-        help.put("description", "Blue/Green Switchover Test API - 用于测试 AWS JDBC Wrapper 在蓝绿切换时的表现");
+        help.put("description", "Blue/Green Switchover Test API - Tests AWS JDBC Wrapper behavior during Blue/Green switchover");
         
         help.put("endpoints", Map.of(
-            "POST /api/bluegreen/start", "启动测试 (可自定义参数)",
-            "POST /api/bluegreen/start-continuous", "启动持续测试 (无限期运行)",
-            "POST /api/bluegreen/stop", "停止测试",
-            "GET /api/bluegreen/status", "获取测试状态",
-            "POST /api/bluegreen/quick-start", "快速启动 (默认参数)",
-            "POST /api/bluegreen/quick-test", "快速测试 (5线程, 60秒)",
-            "GET /api/bluegreen/help", "获取帮助信息"
+            "POST /api/bluegreen/start", "Start test (customizable parameters)",
+            "POST /api/bluegreen/start-continuous", "Start continuous test (runs indefinitely)",
+            "POST /api/bluegreen/stop", "Stop test",
+            "GET /api/bluegreen/status", "Get test status",
+            "POST /api/bluegreen/quick-start", "Quick start (default parameters)",
+            "POST /api/bluegreen/quick-test", "Quick test (5 threads, 60 seconds)",
+            "GET /api/bluegreen/help", "Get help information"
         ));
         
         help.put("parameters", Map.of(
-            "numThreads", "线程数 (1-100, 默认: 20)",
-            "readsPerSecond", "每线程每秒读取次数 (1-10000, 默认: 500)",
-            "durationSeconds", "测试持续时间(秒) (0=持续模式, 10-86400, 默认: 3600)"
+            "numThreads", "Number of threads (1-100, default: 20)",
+            "readsPerSecond", "Reads per second per thread (1-10000, default: 500)",
+            "durationSeconds", "Test duration in seconds (0=continuous mode, 10-86400, default: 3600)"
         ));
         
         help.put("examples", Map.of(
@@ -352,9 +352,9 @@ public class BlueGreenTestController {
         ));
         
         help.put("testScenario", Map.of(
-            "description", "多线程持续元数据读取，模拟高频数据库访问",
-            "monitoring", "监控 failover 事件和连接状态变化",
-            "logging", "详细日志记录在 logs/jdbc-wrapper.log 和 logs/spring-boot.log"
+            "description", "Multi-threaded continuous metadata reads, simulating high-frequency database access",
+            "monitoring", "Monitors failover events and connection state changes",
+            "logging", "Detailed logs in logs/jdbc-wrapper.log and logs/spring-boot.log"
         ));
         
         return ResponseEntity.ok(help);

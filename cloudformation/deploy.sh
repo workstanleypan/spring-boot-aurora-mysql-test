@@ -14,10 +14,10 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 
 #==============================================================================
-# 加载配置
+# Load configuration
 #==============================================================================
 load_config() {
-    # 优先加载 config.local.env
+    # Prefer config.local.env
     if [ -f "$SCRIPT_DIR/config.local.env" ]; then
         echo -e "${CYAN}Loading: config.local.env${NC}"
         set -a
@@ -30,7 +30,7 @@ load_config() {
         set +a
     fi
 
-    # 设置默认值
+    # Set defaults
     STACK_NAME="${STACK_NAME:-aurora-bg-test}"
     REGION="${AWS_REGION:-${REGION:-us-east-1}}"
     USE_EXISTING_VPC="${USE_EXISTING_VPC:-true}"
@@ -41,7 +41,7 @@ load_config() {
     DB_NAME="${DB_NAME:-testdb}"
     INSTANCE_CLASS="${INSTANCE_CLASS:-db.t3.medium}"
     
-    # 集群配置
+    # Cluster configuration
     CLUSTER_COUNT="${CLUSTER_COUNT:-1}"
     INSTANCES_PER_CLUSTER="${INSTANCES_PER_CLUSTER:-2}"
     ENGINE_VERSION="${ENGINE_VERSION:-8.0.mysql_aurora.3.04.2}"
@@ -49,7 +49,7 @@ load_config() {
 }
 
 #==============================================================================
-# 帮助
+# Help
 #==============================================================================
 usage() {
     echo "Usage: $0 <command>"
@@ -102,7 +102,7 @@ show_config() {
 }
 
 #==============================================================================
-# 部署
+# Deploy
 #==============================================================================
 deploy_stack() {
     load_config
@@ -118,7 +118,7 @@ deploy_stack() {
         exit 1
     fi
 
-    # 验证参数
+    # Validate parameters
     if [ "$CLUSTER_COUNT" -lt 1 ] || [ "$CLUSTER_COUNT" -gt 3 ]; then
         echo -e "${RED}Error: CLUSTER_COUNT must be 1-3${NC}"
         exit 1
@@ -126,7 +126,7 @@ deploy_stack() {
 
     TEMPLATE_FILE="$SCRIPT_DIR/aurora-bluegreen-test.yaml"
 
-    # 自动检测 VPC 和子网
+    # Auto-detect VPC and subnets
     if [ "$USE_EXISTING_VPC" = "true" ]; then
         if [ -z "$VPC_ID" ]; then
             echo "Auto-detecting default VPC..."
@@ -203,7 +203,7 @@ deploy_stack() {
 }
 
 #==============================================================================
-# 初始化数据库
+# Initialize database
 #==============================================================================
 init_db() {
     load_config
@@ -214,7 +214,7 @@ init_db() {
     echo "╚══════════════════════════════════════════════════════════════╝"
     echo ""
 
-    # 获取集群 endpoint
+    # Get cluster endpoint
     ENDPOINT=$(aws cloudformation describe-stacks \
         --stack-name "$STACK_NAME" \
         --query "Stacks[0].Outputs[?OutputKey=='Cluster1Endpoint'].OutputValue" \
@@ -260,7 +260,7 @@ init_db() {
 }
 
 #==============================================================================
-# 蓝绿部署
+# Blue/Green deployment
 #==============================================================================
 create_bluegreen() {
     load_config
@@ -317,7 +317,7 @@ create_bluegreen() {
 }
 
 #==============================================================================
-# 状态
+# Status
 #==============================================================================
 show_status() {
     load_config
@@ -361,7 +361,7 @@ show_outputs() {
 }
 
 #==============================================================================
-# 删除
+# Delete
 #==============================================================================
 delete_all() {
     load_config
@@ -391,7 +391,7 @@ delete_all() {
 }
 
 #==============================================================================
-# 主入口
+# Main entry
 #==============================================================================
 case "${1:-}" in
     deploy) deploy_stack ;;

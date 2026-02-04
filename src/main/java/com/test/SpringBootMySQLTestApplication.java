@@ -13,9 +13,9 @@ import java.util.logging.Level;
 /**
  * Spring Boot MySQL Test Application
  * 
- * 测试 Spring Boot 与 AWS JDBC Wrapper 的集成
+ * Tests Spring Boot integration with AWS JDBC Wrapper
  * 
- * 日志架构：
+ * Logging Architecture:
  * AWS JDBC Wrapper (JUL) → SLF4JBridgeHandler → SLF4J → Log4j2
  */
 @SpringBootApplication
@@ -24,15 +24,15 @@ public class SpringBootMySQLTestApplication {
     private static final Logger log = LoggerFactory.getLogger(SpringBootMySQLTestApplication.class);
     
     static {
-        // 初始化 JUL 到 SLF4J 的桥接
+        // Initialize JUL to SLF4J bridge
         SLF4JBridgeHandler.removeHandlersForRootLogger();
         SLF4JBridgeHandler.install();
         
-        // 设置 JUL root logger 级别为 ALL，让所有日志都能通过桥接
+        // Set JUL root logger level to ALL to allow all logs through the bridge
         java.util.logging.Logger rootLogger = java.util.logging.Logger.getLogger("");
         rootLogger.setLevel(Level.ALL);
         
-        // 设置 AWS JDBC Wrapper 的日志级别
+        // Set AWS JDBC Wrapper log level
         String wrapperLogLevel = System.getenv("WRAPPER_LOG_LEVEL");
         if (wrapperLogLevel != null && !wrapperLogLevel.isEmpty()) {
             try {

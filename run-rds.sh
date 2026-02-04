@@ -5,10 +5,10 @@ echo "║   Spring Boot MySQL Test - RDS Configuration                  ║"
 echo "╚════════════════════════════════════════════════════════════════╝"
 echo ""
 
-# 检查是否提供了环境参数
+# Check environment parameter
 ENV=${1:-prod}
 
-# 检查必需的环境变量
+# Check required environment variables
 if [ -z "$RDS_ENDPOINT" ]; then
     echo "❌ Error: RDS_ENDPOINT is not set"
     echo ""
@@ -32,7 +32,7 @@ if [ -z "$RDS_PASSWORD" ]; then
     exit 1
 fi
 
-# 显示配置信息
+# Display configuration
 echo "📋 RDS Configuration:"
 echo "   Endpoint: $RDS_ENDPOINT"
 echo "   Database: ${RDS_DATABASE:-testdb}"
@@ -43,11 +43,11 @@ if [ -n "$JDBC_PARAMS" ]; then
 fi
 echo ""
 
-# 根据环境选择配置
+# Select configuration based on environment
 if [ "$ENV" = "dev" ]; then
     echo "🔧 Environment: Development"
     echo "   Profile: rds-dev"
-    # 只在未设置时才设置默认值
+    # Only set default if not already set
     if [ -z "$WRAPPER_LOG_LEVEL" ]; then
         export WRAPPER_LOG_LEVEL="FINE"
     fi
@@ -57,7 +57,7 @@ if [ "$ENV" = "dev" ]; then
 elif [ "$ENV" = "prod" ]; then
     echo "🚀 Environment: Production"
     echo "   Profile: rds-prod"
-    # 只在未设置时才设置默认值
+    # Only set default if not already set
     if [ -z "$WRAPPER_LOG_LEVEL" ]; then
         export WRAPPER_LOG_LEVEL="INFO"
     fi
@@ -88,7 +88,7 @@ fi
 echo ""
 echo "🔍 Testing network connectivity..."
 
-# 测试网络连通性
+# Test network connectivity
 if command -v nc &> /dev/null; then
     if nc -z -w5 "$RDS_ENDPOINT" 3306 2>/dev/null; then
         echo "✅ Network connectivity OK"
@@ -113,5 +113,5 @@ echo ""
 echo "🚀 Starting Spring Boot application..."
 echo ""
 
-# 启动应用
+# Start application
 ./run.sh "$PROFILE"

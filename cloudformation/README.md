@@ -1,157 +1,157 @@
 # Aurora MySQL Blue/Green Test Environment
 
-一键部署 Aurora MySQL 集群并创建蓝绿部署测试环境。
+One-click deployment of Aurora MySQL clusters with Blue/Green deployment test environment.
 
-## 快速开始
+## Quick Start
 
 ```bash
 cd cloudformation
 
-# 1. 配置（可选）
+# 1. Configure (optional)
 cp config.env config.local.env
-# 编辑 config.local.env 设置参数
+# Edit config.local.env to set parameters
 
-# 2. 部署集群 (~15-20 分钟)
+# 2. Deploy clusters (~15-20 minutes)
 DB_PASSWORD=YourPassword123 ./deploy.sh deploy
 
-# 3. 初始化数据库（创建测试用户）
+# 3. Initialize database (create test users)
 ./deploy.sh init-db
 
-# 4. 创建蓝绿部署 (~20-30 分钟)
+# 4. Create Blue/Green deployment (~20-30 minutes)
 ./deploy.sh create-bluegreen
 
-# 5. 查看状态
+# 5. Check status
 ./deploy.sh status
 ```
 
-## 配置文件
+## Configuration File
 
-编辑 `config.local.env`：
+Edit `config.local.env`:
 
 ```bash
-# 核心配置
-CLUSTER_COUNT=1               # 集群数量 (1-3)
-INSTANCES_PER_CLUSTER=2       # 每集群实例数 (1-3)
-ENGINE_VERSION=8.0.mysql_aurora.3.04.2    # Blue 版本
-TARGET_VERSION=8.0.mysql_aurora.3.10.3    # Green 目标版本
+# Core configuration
+CLUSTER_COUNT=1               # Number of clusters (1-3)
+INSTANCES_PER_CLUSTER=2       # Instances per cluster (1-3)
+ENGINE_VERSION=8.0.mysql_aurora.3.04.2    # Blue version
+TARGET_VERSION=8.0.mysql_aurora.3.10.3    # Green target version
 
-# 数据库
-DB_PASSWORD=YourPassword      # 必填
+# Database
+DB_PASSWORD=YourPassword      # Required
 DB_USERNAME=admin
 DB_NAME=testdb
 INSTANCE_CLASS=db.t3.medium
 
-# VPC（自动检测默认 VPC）
+# VPC (auto-detects default VPC)
 USE_EXISTING_VPC=true
-VPC_ID=                       # 留空自动检测
+VPC_ID=                       # Leave empty for auto-detection
 ```
 
-## 命令行示例
+## Command Line Examples
 
 ```bash
-# 单集群（默认）
+# Single cluster (default)
 DB_PASSWORD=MyPass ./deploy.sh deploy
 
-# 2 个集群
+# 2 clusters
 CLUSTER_COUNT=2 DB_PASSWORD=MyPass ./deploy.sh deploy
 
-# 3 个集群，每个 3 实例
+# 3 clusters, 3 instances each
 CLUSTER_COUNT=3 INSTANCES_PER_CLUSTER=3 DB_PASSWORD=MyPass ./deploy.sh deploy
 
-# 指定版本
+# Specify version
 ENGINE_VERSION=8.0.mysql_aurora.3.08.0 DB_PASSWORD=MyPass ./deploy.sh deploy
 ```
 
-## 命令说明
+## Commands
 
-| 命令 | 说明 |
-|------|------|
-| `deploy` | 部署 Aurora 集群 |
-| `init-db` | 初始化数据库，创建测试用户 |
-| `create-bluegreen` | 创建蓝绿部署 |
-| `status` | 查看部署状态 |
-| `outputs` | 显示连接信息 |
-| `show-config` | 显示当前配置 |
-| `delete` | 删除所有资源 |
+| Command | Description |
+|---------|-------------|
+| `deploy` | Deploy Aurora clusters |
+| `init-db` | Initialize database, create test users |
+| `create-bluegreen` | Create Blue/Green deployment |
+| `status` | View deployment status |
+| `outputs` | Show connection information |
+| `show-config` | Show current configuration |
+| `delete` | Delete all resources |
 
-## 测试用户
+## Test Users
 
-`init-db` 命令创建以下测试用户：
+The `init-db` command creates the following test users:
 
-| 用户 | 密码 | 权限 |
-|------|------|------|
+| User | Password | Permissions |
+|------|----------|-------------|
 | testuser1 | testuser | SELECT on mysql.*, ALL on testdb.* |
 | testuser2 | testuser | SELECT on mysql.*, ALL on testdb.* |
 | testuser3 | testuser | SELECT on mysql.*, ALL on testdb.* |
 
-## 安全说明
+## Security Notes
 
-- Aurora 集群**不对外公开**（PubliclyAccessible: false）
-- 安全组仅允许 VPC 内部访问（自动检测 VPC CIDR）
-- 需要从同一 VPC 内的 EC2 实例访问数据库
+- Aurora clusters are **not publicly accessible** (PubliclyAccessible: false)
+- Security group only allows VPC internal access (auto-detects VPC CIDR)
+- Database access requires EC2 instance within the same VPC
 
-## 连接应用
+## Connect Application
 
 ```bash
-# 获取连接信息
+# Get connection information
 ./deploy.sh outputs
 
-# 配置环境变量
-export AURORA_CLUSTER_ENDPOINT="<从 outputs 获取>"
+# Configure environment variables
+export AURORA_CLUSTER_ENDPOINT="<from outputs>"
 export AURORA_DATABASE="testdb"
 export AURORA_USERNAME="testuser1"
 export AURORA_PASSWORD="testuser"
 
-# 运行应用
+# Run application
 cd ..
 ./run-aurora.sh
 ```
 
-## 执行蓝绿切换
+## Execute Blue/Green Switchover
 
 ```bash
-# 查看蓝绿部署 ID
+# View Blue/Green deployment ID
 ./deploy.sh status
 
-# 执行切换
+# Execute switchover
 aws rds switchover-blue-green-deployment \
     --blue-green-deployment-identifier <bg-id> \
     --switchover-timeout 300
 ```
 
-## 清理资源
+## Cleanup Resources
 
 ```bash
 ./deploy.sh delete
 ```
 
-⚠️ **测试完成后请及时删除资源，避免产生费用！**
+⚠️ **Please delete resources promptly after testing to avoid charges!**
 
-## 费用估算
+## Cost Estimate
 
-- db.t3.medium: ~$0.04/小时/实例
-- 默认配置 (1 集群 × 2 实例): ~$0.08/小时
-- 蓝绿部署期间 Green 实例: 费用翻倍
+- db.t3.medium: ~$0.04/hour/instance
+- Default configuration (1 cluster × 2 instances): ~$0.08/hour
+- During Blue/Green deployment, Green instances double the cost
 
-## 故障排查
+## Troubleshooting
 
 ```bash
-# CloudFormation 事件
+# CloudFormation events
 aws cloudformation describe-stack-events --stack-name aurora-bg-test
 
-# 测试连接（需要在 VPC 内）
+# Test connection (requires VPC access)
 nc -zv <cluster-endpoint> 3306
 
-# 蓝绿部署状态
+# Blue/Green deployment status
 aws rds describe-blue-green-deployments
 ```
 
-## 支持的 Aurora 版本
+## Supported Aurora Versions
 
-**Blue 集群版本：**
+**Blue Cluster Versions:**
 - 3.04.x (MySQL 8.0.28)
 - 3.08.x (MySQL 8.0.36)
 - 3.09.x (MySQL 8.0.37)
 
-**Green 目标版本：**
-- 3.10.x LTS (MySQL 8.0.39) - 推荐
+**Green Target Versions:**
+- 3.10.x LTS (MySQL 8.0.39) - Recommended

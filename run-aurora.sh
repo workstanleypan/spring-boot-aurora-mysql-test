@@ -5,10 +5,10 @@ echo "║   Spring Boot MySQL Test - Aurora Configuration               ║"
 echo "╚════════════════════════════════════════════════════════════════╝"
 echo ""
 
-# 检查是否提供了环境参数
+# Check environment parameter
 ENV=${1:-prod}
 
-# 检查必需的环境变量
+# Check required environment variables
 if [ -z "$AURORA_CLUSTER_ENDPOINT" ]; then
     echo "❌ Error: AURORA_CLUSTER_ENDPOINT is not set"
     echo ""
@@ -32,7 +32,7 @@ if [ -z "$AURORA_PASSWORD" ]; then
     exit 1
 fi
 
-# 显示配置信息
+# Display configuration
 echo "📋 Aurora Configuration:"
 echo "   Cluster Endpoint: $AURORA_CLUSTER_ENDPOINT"
 echo "   Database: ${AURORA_DATABASE:-testdb}"
@@ -43,11 +43,11 @@ if [ -n "$JDBC_PARAMS" ]; then
 fi
 echo ""
 
-# 根据环境选择配置
+# Select configuration based on environment
 if [ "$ENV" = "dev" ]; then
     echo "🔧 Environment: Development"
     echo "   Profile: aurora-dev"
-    # 只在未设置时才设置默认值
+    # Only set default if not already set
     if [ -z "$WRAPPER_LOG_LEVEL" ]; then
         export WRAPPER_LOG_LEVEL="FINEST"
     fi
@@ -57,7 +57,7 @@ if [ "$ENV" = "dev" ]; then
 elif [ "$ENV" = "prod" ]; then
     echo "🚀 Environment: Production"
     echo "   Profile: aurora-prod"
-    # 只在未设置时才设置默认值
+    # Only set default if not already set
     if [ -z "$WRAPPER_LOG_LEVEL" ]; then
         export WRAPPER_LOG_LEVEL="FINE"
     fi
@@ -81,7 +81,7 @@ fi
 echo ""
 echo "🔍 Testing network connectivity..."
 
-# 测试网络连通性
+# Test network connectivity
 if command -v nc &> /dev/null; then
     if nc -z -w5 "$AURORA_CLUSTER_ENDPOINT" 3306 2>/dev/null; then
         echo "✅ Network connectivity OK"
@@ -106,7 +106,7 @@ echo ""
 echo "🚀 Starting Spring Boot application..."
 echo ""
 
-# 启动应用
+# Start application
 JAR_FILE=$(ls -t target/*.jar 2>/dev/null | head -1)
 
 if [ -z "$JAR_FILE" ]; then
@@ -121,5 +121,5 @@ fi
 echo "📦 Using JAR: $JAR_FILE"
 echo ""
 
-# 启动应用
+# Start application
 java -jar "$JAR_FILE" --spring.profiles.active="$PROFILE"
