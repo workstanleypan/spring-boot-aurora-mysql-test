@@ -11,35 +11,70 @@ Spring Boot 应用，用于测试 AWS JDBC Wrapper 连接 Aurora MySQL，支持 
 - 多线程持续写入测试
 - Spring Boot 3.4.2
 
+## 环境要求
+
+- Java 17+
+- Maven 3.6+
+- AWS CLI（用于 CloudFormation 部署）
+- Aurora MySQL 集群访问权限
+
 ## 快速开始
 
-### 1. 部署 Aurora 集群
+### 1. 克隆并编译
+
+```bash
+# 克隆仓库
+git clone https://github.com/workstanleypan/spring-boot-aurora-mysql-test.git
+cd spring-boot-aurora-mysql-test
+
+# 编译（跳过测试）
+mvn clean package -DskipTests
+
+# 或者带测试编译（需要数据库连接）
+mvn clean package
+```
+
+### 2. 部署 Aurora 集群（可选）
+
+如果没有 Aurora 集群，可以使用 CloudFormation 创建：
 
 ```bash
 cd cloudformation
-./deploy.sh deploy
-./deploy.sh init-db
+
+# 部署集群（约 15-20 分钟）
+DB_PASSWORD=YourPassword123 ./deploy.sh deploy
+
+# 初始化数据库（创建测试用户和表）
+DB_PASSWORD=YourPassword123 ./deploy.sh init-db
+
+# 创建蓝绿部署（约 20-30 分钟）
 ./deploy.sh create-bluegreen
+
+# 获取连接信息
+./deploy.sh outputs
 ```
 
-### 2. 启动应用
+### 3. 配置并运行
 
 ```bash
-# 配置环境变量
-export AURORA_CLUSTER_ENDPOINT="<cluster-endpoint>"
+# 设置环境变量
+export AURORA_CLUSTER_ENDPOINT="your-cluster.cluster-xxxxx.us-east-1.rds.amazonaws.com"
 export AURORA_DATABASE="testdb"
 export AURORA_USERNAME="admin"
-export AURORA_PASSWORD="<password>"
+export AURORA_PASSWORD="your-password"
 export WRAPPER_LOG_LEVEL="FINE"  # 可选: SEVERE|WARNING|INFO|FINE|FINER|FINEST
 
-# 启动
+# 运行应用
 ./run-aurora.sh prod
+
+# 或者使用 Maven 直接运行
+mvn spring-boot:run -Dspring-boot.run.profiles=aurora-prod
 ```
 
-### 3. 启动测试
+### 4. 运行测试
 
 ```bash
-# 持续写入测试 - 10个连接，每100ms写入一次
+# 启动持续写入测试 - 10个连接，每100ms写入一次
 curl -X POST "http://localhost:8080/api/bluegreen/start-write?numConnections=10&writeIntervalMs=100"
 
 # 查看状态
@@ -47,6 +82,22 @@ curl http://localhost:8080/api/bluegreen/status
 
 # 停止测试
 curl -X POST http://localhost:8080/api/bluegreen/stop
+```
+
+## 编译选项
+
+```bash
+# 标准编译（跳过测试）
+mvn clean package -DskipTests
+
+# 使用特定 profile 编译
+mvn clean package -P production
+
+# 构建 Docker 镜像（如果有 Dockerfile）
+docker build -t aurora-mysql-test .
+
+# 直接运行 JAR
+java -jar target/spring-boot-aurora-mysql-test-1.0.0.jar --spring.profiles.active=aurora-prod
 ```
 
 ## API 端点
@@ -59,6 +110,7 @@ curl -X POST http://localhost:8080/api/bluegreen/stop
 | `/api/bluegreen/status` | GET | 获取测试状态 |
 | `/api/bluegreen/help` | GET | 获取帮助信息 |
 | `/actuator/health` | GET | 健康检查 |
+| `/api/test` | GET | 测试数据库连接 |
 
 ### 持续写入测试参数
 
@@ -71,32 +123,36 @@ curl -X POST "http://localhost:8080/api/bluegreen/start-write?numConnections=20&
 | `numConnections` | 10 | 连接数量 (1-100) |
 | `writeIntervalMs` | 100 | 写入间隔毫秒 (0=最快) |
 
-## JDBC 配置
+## 配置说明
+
+### 环境变量
+
+| 变量 | 必需 | 说明 |
+|------|------|------|
+| `AURORA_CLUSTER_ENDPOINT` | 是 | Aurora 集群端点 |
+| `AURORA_DATABASE` | 是 | 数据库名称 |
+| `AURORA_USERNAME` | 是 | 数据库用户名 |
+| `AURORA_PASSWORD` | 是 | 数据库密码 |
+| `WRAPPER_LOG_LEVEL` | 否 | 日志级别（默认: INFO） |
+
+### 应用 Profile
+
+| Profile | 日志级别 | 用途 |
+|---------|----------|------|
+| `aurora-prod` | FINE | 生产环境 |
+| `aurora-dev` | FINEST | 开发/调试 |
 
 ### JDBC URL 格式
 
 ```
-jdbc:aws-wrapper:mysql://<cluster-endpoint>:3306/<database>?characterEncoding=utf8&wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=FINE&bgdId=<cluster-name>
+jdbc:aws-wrapper:mysql://<cluster-endpoint>:3306/<database>?characterEncoding=utf8&wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=FINE
 ```
 
 **重要**: 
-- 必须使用 **集群端点** (Cluster Endpoint)
+- 必须使用 **集群端点**（包含 `.cluster-`）
 - **不要使用** `autoreconnect=true`
 
-### URL 参数说明
-
-| 参数 | 说明 |
-|------|------|
-| `characterEncoding=utf8` | MySQL 字符编码 |
-| `wrapperPlugins=...` | Wrapper 插件链（必需） |
-| `wrapperLoggerLevel=FINE` | 日志级别 |
-| `bgdId=<cluster-name>` | 多集群场景需要配置，单集群可省略 |
-
 ### 插件链
-
-```
-wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg
-```
 
 | 插件 | 功能 |
 |------|------|
@@ -106,16 +162,40 @@ wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg
 | `efm2` | 增强故障监控 |
 | `bg` | Blue/Green 部署支持 |
 
-### 日志级别
+## 项目结构
 
-通过 `WRAPPER_LOG_LEVEL` 环境变量控制：
-
-| 级别 | 说明 |
-|------|------|
-| `INFO` | 基本信息 |
-| `FINE` | 生产环境推荐，显示 BG 插件状态、连接事件 |
-| `FINER` | 详细插件执行流程 |
-| `FINEST` | 测试环境推荐，最详细调试信息 |
+```
+spring-boot-aurora-mysql-test/
+├── src/main/java/com/test/
+│   ├── SpringBootMySQLTestApplication.java
+│   ├── controller/
+│   │   ├── BlueGreenTestController.java
+│   │   └── UserController.java
+│   ├── service/
+│   │   ├── BlueGreenTestService.java
+│   │   └── UserService.java
+│   ├── repository/
+│   │   └── UserRepository.java
+│   └── model/
+│       └── User.java
+├── src/main/resources/
+│   ├── application.yml
+│   └── log4j2-spring.xml
+├── cloudformation/
+│   ├── deploy.sh
+│   ├── aurora-bluegreen-test.yaml
+│   ├── init-database.sql
+│   └── config.env
+├── docs/
+│   ├── AURORA_CONFIGURATION_GUIDE.md
+│   ├── AURORA_QUICK_START.md
+│   ├── BLUEGREEN_TEST_GUIDE.md
+│   └── PLUGIN_CONFIGURATION.md
+├── run-aurora.sh
+├── run-rds.sh
+├── pom.xml
+└── README.md
+```
 
 ## 文档
 
@@ -123,7 +203,7 @@ wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg
 - [Aurora 快速开始](AURORA_QUICK_START.md)
 - [Blue/Green 测试指南](BLUEGREEN_TEST_GUIDE.md)
 - [插件配置说明](PLUGIN_CONFIGURATION.md)
-- [CloudFormation 部署](../cloudformation/README.md)
+- [CloudFormation 部署](../cloudformation/README_CN.md)
 
 ## 清理资源
 
@@ -131,6 +211,8 @@ wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg
 cd cloudformation
 ./deploy.sh delete
 ```
+
+⚠️ **测试完成后请及时删除资源，避免产生费用！**
 
 ## 许可证
 
