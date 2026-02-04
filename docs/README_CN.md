@@ -41,8 +41,13 @@ mvn clean package
 ```bash
 cd cloudformation
 
-# 部署集群（约 15-20 分钟）
+# 方式一：使用环境变量（推荐一次性使用）
 DB_PASSWORD=YourPassword123 ./deploy.sh deploy
+
+# 方式二：使用配置文件（推荐重复使用）
+cp config.env config.local.env
+# 编辑 config.local.env 设置 DB_PASSWORD
+./deploy.sh deploy
 
 # 初始化数据库（创建测试用户和表）
 DB_PASSWORD=YourPassword123 ./deploy.sh init-db

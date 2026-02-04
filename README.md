@@ -41,8 +41,13 @@ If you don't have an Aurora cluster, use CloudFormation to create one:
 ```bash
 cd cloudformation
 
-# Deploy cluster (~15-20 minutes)
+# Option 1: Use environment variables (recommended for one-time use)
 DB_PASSWORD=YourPassword123 ./deploy.sh deploy
+
+# Option 2: Use config file (recommended for repeated use)
+cp config.env config.local.env
+# Edit config.local.env and set DB_PASSWORD
+./deploy.sh deploy
 
 # Initialize database (create test users and tables)
 DB_PASSWORD=YourPassword123 ./deploy.sh init-db

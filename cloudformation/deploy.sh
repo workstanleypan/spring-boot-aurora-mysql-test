@@ -17,7 +17,16 @@ NC='\033[0m'
 # Load configuration
 #==============================================================================
 load_config() {
-    # Prefer config.local.env
+    # Save command line environment variables (they take priority)
+    local CLI_DB_PASSWORD="${DB_PASSWORD:-}"
+    local CLI_STACK_NAME="${STACK_NAME:-}"
+    local CLI_REGION="${REGION:-}"
+    local CLI_CLUSTER_COUNT="${CLUSTER_COUNT:-}"
+    local CLI_INSTANCES_PER_CLUSTER="${INSTANCES_PER_CLUSTER:-}"
+    local CLI_ENGINE_VERSION="${ENGINE_VERSION:-}"
+    local CLI_TARGET_VERSION="${TARGET_VERSION:-}"
+    
+    # Load config file
     if [ -f "$SCRIPT_DIR/config.local.env" ]; then
         echo -e "${CYAN}Loading: config.local.env${NC}"
         set -a
@@ -30,7 +39,16 @@ load_config() {
         set +a
     fi
 
-    # Set defaults
+    # Command line variables override config file
+    [ -n "$CLI_DB_PASSWORD" ] && DB_PASSWORD="$CLI_DB_PASSWORD"
+    [ -n "$CLI_STACK_NAME" ] && STACK_NAME="$CLI_STACK_NAME"
+    [ -n "$CLI_REGION" ] && REGION="$CLI_REGION"
+    [ -n "$CLI_CLUSTER_COUNT" ] && CLUSTER_COUNT="$CLI_CLUSTER_COUNT"
+    [ -n "$CLI_INSTANCES_PER_CLUSTER" ] && INSTANCES_PER_CLUSTER="$CLI_INSTANCES_PER_CLUSTER"
+    [ -n "$CLI_ENGINE_VERSION" ] && ENGINE_VERSION="$CLI_ENGINE_VERSION"
+    [ -n "$CLI_TARGET_VERSION" ] && TARGET_VERSION="$CLI_TARGET_VERSION"
+
+    # Set defaults for any remaining empty values
     STACK_NAME="${STACK_NAME:-aurora-bg-test}"
     REGION="${AWS_REGION:-${REGION:-us-east-1}}"
     USE_EXISTING_VPC="${USE_EXISTING_VPC:-true}"
