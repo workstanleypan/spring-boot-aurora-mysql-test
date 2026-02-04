@@ -277,6 +277,7 @@ public String startWriteOnlyTest(int numConnections, int writeIntervalMs) {
     
     /**
      * Persistent connection write thread - holds connection without releasing, continuous writes
+     * Automatically reconnects after failover
      */
     private void runPersistentWriteThread(int threadId, int writeIntervalMs) {
         log.info("✍️  [{}] Write-Thread-{}: Starting continuous writes...", now(), threadId);
@@ -284,26 +285,47 @@ public String startWriteOnlyTest(int numConnections, int writeIntervalMs) {
         Connection conn = null;
         String tableName = "bg_write_test";
         
+        long writeCount = 0;
+        long lastReportTime = System.currentTimeMillis();
+        long lastReportCount = 0;
+        int reconnectAttempts = 0;
+        final int MAX_RECONNECT_ATTEMPTS = 10;
+        final long RECONNECT_DELAY_MS = 1000;
+        
         try {
-            // Get and hold connection
-            conn = dataSource.getConnection();
+            // Get initial connection
+            conn = getConnectionWithRetry(threadId, MAX_RECONNECT_ATTEMPTS, RECONNECT_DELAY_MS);
+            if (conn == null) {
+                log.error("❌ [{}] Write-Thread-{}: Failed to get initial connection", now(), threadId);
+                return;
+            }
+            
             String endpoint = getEndpointInfo(conn);
             lastEndpoint = endpoint;
-            
             log.info("✅ [{}] Write-Thread-{} got connection: {}", now(), threadId, endpoint);
             
             // Create test table if not exists
             ensureTestTable(conn, tableName);
-            
-            long writeCount = 0;
-            long lastReportTime = System.currentTimeMillis();
-            long lastReportCount = 0;
             
             // Continuous writes until test stops
             while (testRunning.get()) {
                 long writeStart = System.nanoTime();
                 
                 try {
+                    // Check if connection is still valid
+                    if (conn == null || conn.isClosed()) {
+                        log.warn("⚠️  [{}] Write-Thread-{}: Connection is closed, reconnecting...", now(), threadId);
+                        conn = getConnectionWithRetry(threadId, MAX_RECONNECT_ATTEMPTS, RECONNECT_DELAY_MS);
+                        if (conn == null) {
+                            log.error("❌ [{}] Write-Thread-{}: Failed to reconnect", now(), threadId);
+                            break;
+                        }
+                        endpoint = getEndpointInfo(conn);
+                        lastEndpoint = endpoint;
+                        log.info("✅ [{}] Write-Thread-{}: Reconnected to {}", now(), threadId, endpoint);
+                        reconnectAttempts = 0;
+                    }
+                    
                     // Execute write
                     String sql = "INSERT INTO " + tableName + 
                         " (thread_id, endpoint, write_time, data) VALUES (?, ?, NOW(), ?)";
@@ -315,22 +337,54 @@ public String startWriteOnlyTest(int numConnections, int writeIntervalMs) {
                     }
                     
                     successfulWrites.incrementAndGet();
+                    reconnectAttempts = 0; // Reset on success
                     
                 } catch (SQLException e) {
                     failedWrites.incrementAndGet();
                     
-                    String msg = e.getMessage().toLowerCase();
+                    String msg = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
+                    String exceptionClass = e.getClass().getName();
+                    
+                    // Check if this is a failover success exception (connection switched)
+                    boolean isFailoverSuccess = exceptionClass.contains("FailoverSuccessSQLException") ||
+                        msg.contains("connection has changed") ||
+                        msg.contains("active sql connection has changed");
+                    
+                    // Check if connection is broken/closed
+                    boolean isConnectionBroken = msg.contains("connection is closed") ||
+                        msg.contains("connection closed") ||
+                        msg.contains("no operations allowed") ||
+                        e.getSQLState() != null && e.getSQLState().startsWith("08");
+                    
                     if (msg.contains("read-only") || msg.contains("read only")) {
                         readOnlyErrors.incrementAndGet();
                         log.warn("⚠️  [{}] Write-Thread-{}: READ-ONLY error - {}", 
                             now(), threadId, e.getMessage());
-                    } else if (msg.contains("failover") || msg.contains("connection")) {
+                        // Try to reconnect to get a writer connection
+                        conn = handleFailoverAndReconnect(conn, threadId, MAX_RECONNECT_ATTEMPTS, RECONNECT_DELAY_MS);
+                        if (conn != null) {
+                            endpoint = getEndpointInfo(conn);
+                            lastEndpoint = endpoint;
+                        }
+                    } else if (isFailoverSuccess || isConnectionBroken) {
                         failoverCount.incrementAndGet();
-                        log.error("🔄 [{}] Write-Thread-{}: FAILOVER detected - {}", 
+                        log.info("� [{}] Write-Thread-{}: Failover detected, reconnecting... ({})", 
                             now(), threadId, e.getMessage());
+                        
+                        // Close old connection and get new one
+                        conn = handleFailoverAndReconnect(conn, threadId, MAX_RECONNECT_ATTEMPTS, RECONNECT_DELAY_MS);
+                        if (conn != null) {
+                            endpoint = getEndpointInfo(conn);
+                            lastEndpoint = endpoint;
+                            log.info("✅ [{}] Write-Thread-{}: Successfully reconnected after failover to {}", 
+                                now(), threadId, endpoint);
+                        } else {
+                            log.error("❌ [{}] Write-Thread-{}: Failed to reconnect after failover", now(), threadId);
+                            break;
+                        }
                     } else {
-                        log.error("❌ [{}] Write-Thread-{}: Write failed - {}", 
-                            now(), threadId, e.getMessage());
+                        log.error("❌ [{}] Write-Thread-{}: Write failed - {} (SQLState: {}, ErrorCode: {})", 
+                            now(), threadId, e.getMessage(), e.getSQLState(), e.getErrorCode());
                     }
                 }
                 
@@ -345,8 +399,8 @@ public String startWriteOnlyTest(int numConnections, int writeIntervalMs) {
                 if (currentTime - lastReportTime >= 10000) {
                     long writesInPeriod = writeCount - lastReportCount;
                     double actualRate = writesInPeriod / ((currentTime - lastReportTime) / 1000.0);
-                    log.info("📊 [{}] Write-Thread-{}: {} writes, rate: {}/sec, latency: {}ms",
-                        now(), threadId, writeCount, String.format("%.1f", actualRate), writeLatency);
+                    log.info("📊 [{}] Write-Thread-{}: {} writes, rate: {}/sec, latency: {}ms, endpoint: {}",
+                        now(), threadId, writeCount, String.format("%.1f", actualRate), writeLatency, endpoint);
                     lastReportTime = currentTime;
                     lastReportCount = writeCount;
                 }
@@ -364,8 +418,8 @@ public String startWriteOnlyTest(int numConnections, int writeIntervalMs) {
             
             log.info("✅ [{}] Write-Thread-{}: Completed {} writes", now(), threadId, writeCount);
             
-        } catch (SQLException e) {
-            log.error("❌ [{}] Write-Thread-{} connection error: {}", now(), threadId, e.getMessage());
+        } catch (Exception e) {
+            log.error("❌ [{}] Write-Thread-{} fatal error: {}", now(), threadId, e.getMessage());
         } finally {
             // Close connection only when test ends
             if (conn != null) {
@@ -377,6 +431,58 @@ public String startWriteOnlyTest(int numConnections, int writeIntervalMs) {
                 }
             }
         }
+    }
+    
+    /**
+     * Get connection with retry logic
+     */
+    private Connection getConnectionWithRetry(int threadId, int maxAttempts, long delayMs) {
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                Connection conn = dataSource.getConnection();
+                if (conn != null && !conn.isClosed()) {
+                    return conn;
+                }
+            } catch (SQLException e) {
+                log.warn("⚠️  [{}] Write-Thread-{}: Connection attempt {}/{} failed: {}", 
+                    now(), threadId, attempt, maxAttempts, e.getMessage());
+            }
+            
+            if (attempt < maxAttempts && testRunning.get()) {
+                try {
+                    Thread.sleep(delayMs);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return null;
+                }
+            }
+        }
+        return null;
+    }
+    
+    /**
+     * Handle failover by closing old connection and getting new one
+     */
+    private Connection handleFailoverAndReconnect(Connection oldConn, int threadId, int maxAttempts, long delayMs) {
+        // Close old connection
+        if (oldConn != null) {
+            try {
+                oldConn.close();
+            } catch (SQLException e) {
+                // Ignore - connection may already be closed
+            }
+        }
+        
+        // Wait a bit for the cluster to stabilize
+        try {
+            Thread.sleep(500);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        }
+        
+        // Get new connection
+        return getConnectionWithRetry(threadId, maxAttempts, delayMs);
     }
     
     /**
