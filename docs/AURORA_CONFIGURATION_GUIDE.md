@@ -19,10 +19,10 @@ jdbc:aws-wrapper:mysql://my-cluster.cluster-xxx.us-east-1.rds.amazonaws.com/test
 
 | 颜色标记 | 参数 | 说明 |
 |----------|------|------|
-| 🔴 红色 | `writer_cluster_endpoint`, `database_name` | 根据业务修改的连接参数 |
-| � 绿色 | `characterEncoding=utf8` | 原生 MySQL 连接参数 |
-| 🟡 黄色 | `wrapperPlugins=...`, `wrapperLoggerLevel=...` | **必备的 Wrapper 连接参数（重要）** |
-| 🟣 紫色 | `bgdId=clustername` | 多集群场景需要配置（见下文） |
+| 红色 | `writer_cluster_endpoint`, `database_name` | 根据业务修改的连接参数 |
+| 绿色 | `characterEncoding=utf8` | 原生 MySQL 连接参数 |
+| 黄色 | `wrapperPlugins=...`, `wrapperLoggerLevel=...` | **必备的 Wrapper 连接参数（重要）** |
+| 紫色 | `bgdId=clustername` | 多集群场景需要配置（见下文） |
 
 ### ⚠️ 重要注意事项
 
