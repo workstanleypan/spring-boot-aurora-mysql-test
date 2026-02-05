@@ -91,11 +91,14 @@ curl -X POST http://localhost:8080/api/bluegreen/stop
 After a Blue/Green switchover, check the wrapper logs:
 
 ```bash
-# Check Blue/Green status changes
-grep -i "Status changed to" logs/wrapper.log
-
-# View switchover timeline summary
+# View switchover timeline summary (FINE level and above)
 grep -i "time offset" logs/wrapper.log -A 14
+
+# Check BG status changes (FINE level)
+grep -i "BG status" logs/wrapper.log
+
+# Check BG status changes (FINEST level)
+grep -i "Status changed to" logs/wrapper.log
 ```
 
 ## Build Options
@@ -160,8 +163,6 @@ curl -X POST "http://localhost:8080/api/bluegreen/start-write?numConnections=20&
 | `BG_CONNECT_TIMEOUT_MS` | 30000 | Connection timeout (ms) during switchover |
 | `BG_SWITCHOVER_TIMEOUT_MS` | 180000 | Total switchover timeout (ms) |
 
-**Note on `BG_HIGH_MS`**: Reducing this value (e.g., to 50ms) can decrease the probability of race conditions during switchover, but cannot completely eliminate them. The race condition window is approximately `BG_HIGH_MS + query_time + processing_time` (~75ms when BG_HIGH_MS=50).
-
 ### Application Profiles
 
 | Profile | Log Level | Use Case |
@@ -203,6 +204,8 @@ The `bg` plugin monitors Blue/Green deployment status and manages traffic during
 | COMPLETED | `BG_BASELINE_MS` | Normal operation resumed |
 
 **Race Condition Warning**: During the transition to IN_PROGRESS phase, there's a brief window where SQL requests may execute before the suspend rules take effect. This can result in `read-only` errors if the request hits the old (blue) cluster after it becomes read-only.
+
+**Important**: For non-admin database users, ensure proper permissions are granted on BOTH blue and green clusters before switchover. See [Connecting with non-admin users](https://github.com/aws/aws-advanced-jdbc-wrapper/blob/main/docs/using-the-jdbc-driver/using-plugins/UsingTheBlueGreenPlugin.md#connecting-with-non-admin-users) for required permissions.
 
 ## Project Structure
 

@@ -113,6 +113,19 @@ grep -i "blue.*green\|BlueGreen" logs/wrapper.log
 grep -i "failover" logs/wrapper.log
 ```
 
+### Analyze Switchover Results
+
+```bash
+# View switchover timeline summary (FINE level and above)
+grep -i "time offset" logs/wrapper.log -A 14
+
+# Check BG status changes (FINE level)
+grep -i "BG status" logs/wrapper.log
+
+# Check BG status changes (FINEST level)
+grep -i "Status changed to" logs/wrapper.log
+```
+
 ## Monitoring Metrics
 
 ### Key Metrics
@@ -134,6 +147,24 @@ grep -i "failover" logs/wrapper.log
 | Testing | FINEST | Full debug information |
 
 ## Troubleshooting
+
+### Permission Issues (Non-Admin Users)
+
+For non-admin database users, ensure proper permissions are granted on **BOTH** blue and green clusters before switchover:
+
+**Aurora MySQL:**
+```sql
+GRANT SELECT ON mysql.rds_topology TO 'your_user'@'%';
+FLUSH PRIVILEGES;
+```
+
+**RDS PostgreSQL:**
+```sql
+GRANT USAGE ON SCHEMA rds_tools TO your_user;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA rds_tools TO your_user;
+```
+
+If permissions are not granted, the BG plugin cannot access metadata and switchover may fail.
 
 ### High Failure Rate
 1. Check database connection stability
