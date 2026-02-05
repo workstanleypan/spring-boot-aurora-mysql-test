@@ -4,7 +4,7 @@ spring:
   
   # 默认数据源配置 - Aurora MySQL with HikariCP
   datasource:
-    url: jdbc:aws-wrapper:mysql://${AURORA_CLUSTER_ENDPOINT}:3306/${AURORA_DATABASE:testdb}?wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=${WRAPPER_LOG_LEVEL:INFO}&bgdId=${BGD_ID:cluster-a}
+    url: jdbc:aws-wrapper:mysql://${AURORA_CLUSTER_ENDPOINT}:3306/${AURORA_DATABASE:testdb}?wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=${WRAPPER_LOG_LEVEL:INFO}&bgdId=${BGD_ID:cluster-a}&bgHighMs=${BG_HIGH_MS:100}&bgIncreasedMs=${BG_INCREASED_MS:1000}&bgBaselineMs=${BG_BASELINE_MS:60000}&bgConnectTimeoutMs=${BG_CONNECT_TIMEOUT_MS:30000}&bgSwitchoverTimeoutMs=${BG_SWITCHOVER_TIMEOUT_MS:180000}
     username: ${AURORA_USERNAME:admin}
     password: ${AURORA_PASSWORD}
     driver-class-name: software.amazon.jdbc.Driver
@@ -45,7 +45,7 @@ spring:
     activate:
       on-profile: aurora-prod
   datasource:
-    url: jdbc:aws-wrapper:mysql://${AURORA_CLUSTER_ENDPOINT}:3306/${AURORA_DATABASE:testdb}?wrapperLoggerLevel=${WRAPPER_LOG_LEVEL:INFO}&wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&bgdId=${BGD_ID:cluster-a}${JDBC_PARAMS:}
+    url: jdbc:aws-wrapper:mysql://${AURORA_CLUSTER_ENDPOINT}:3306/${AURORA_DATABASE:testdb}?wrapperLoggerLevel=${WRAPPER_LOG_LEVEL:INFO}&wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&bgdId=${BGD_ID:cluster-a}&bgHighMs=${BG_HIGH_MS:100}&bgIncreasedMs=${BG_INCREASED_MS:1000}&bgBaselineMs=${BG_BASELINE_MS:60000}&bgConnectTimeoutMs=${BG_CONNECT_TIMEOUT_MS:30000}&bgSwitchoverTimeoutMs=${BG_SWITCHOVER_TIMEOUT_MS:180000}${JDBC_PARAMS:}
 
 ---
 # Aurora MySQL 开发环境（详细日志）
@@ -54,7 +54,7 @@ spring:
     activate:
       on-profile: aurora-dev
   datasource:
-    url: jdbc:aws-wrapper:mysql://${AURORA_CLUSTER_ENDPOINT}:3306/${AURORA_DATABASE:testdb}?wrapperLoggerLevel=${WRAPPER_LOG_LEVEL:FINE}&wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&bgdId=${BGD_ID:cluster-a}${JDBC_PARAMS:}
+    url: jdbc:aws-wrapper:mysql://${AURORA_CLUSTER_ENDPOINT}:3306/${AURORA_DATABASE:testdb}?wrapperLoggerLevel=${WRAPPER_LOG_LEVEL:FINE}&wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&bgdId=${BGD_ID:cluster-a}&bgHighMs=${BG_HIGH_MS:100}&bgIncreasedMs=${BG_INCREASED_MS:1000}&bgBaselineMs=${BG_BASELINE_MS:60000}&bgConnectTimeoutMs=${BG_CONNECT_TIMEOUT_MS:30000}&bgSwitchoverTimeoutMs=${BG_SWITCHOVER_TIMEOUT_MS:180000}${JDBC_PARAMS:}
     hikari:
       minimum-idle: 5
       maximum-pool-size: 20
@@ -66,7 +66,7 @@ spring:
     activate:
       on-profile: rds-prod
   datasource:
-    url: jdbc:aws-wrapper:mysql://${RDS_ENDPOINT}:3306/${RDS_DATABASE:testdb}?${JDBC_PARAMS:}wrapperPlugins=auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=${WRAPPER_LOG_LEVEL:INFO}&bgdId=${BGD_ID:rds-cluster}
+    url: jdbc:aws-wrapper:mysql://${RDS_ENDPOINT}:3306/${RDS_DATABASE:testdb}?wrapperPlugins=auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=${WRAPPER_LOG_LEVEL:INFO}&bgdId=${BGD_ID:rds-cluster}&bgHighMs=${BG_HIGH_MS:100}&bgIncreasedMs=${BG_INCREASED_MS:1000}&bgBaselineMs=${BG_BASELINE_MS:60000}&bgConnectTimeoutMs=${BG_CONNECT_TIMEOUT_MS:30000}&bgSwitchoverTimeoutMs=${BG_SWITCHOVER_TIMEOUT_MS:180000}${JDBC_PARAMS:}
     username: ${RDS_USERNAME:admin}
     password: ${RDS_PASSWORD}
 
@@ -77,7 +77,7 @@ spring:
     activate:
       on-profile: rds-dev
   datasource:
-    url: jdbc:aws-wrapper:mysql://${RDS_ENDPOINT}:3306/${RDS_DATABASE:testdb}?${JDBC_PARAMS:}wrapperPlugins=auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=FINE&bgdId=${BGD_ID:rds-cluster}
+    url: jdbc:aws-wrapper:mysql://${RDS_ENDPOINT}:3306/${RDS_DATABASE:testdb}?wrapperPlugins=auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=${WRAPPER_LOG_LEVEL:FINE}&bgdId=${BGD_ID:rds-cluster}&bgHighMs=${BG_HIGH_MS:100}&bgIncreasedMs=${BG_INCREASED_MS:1000}&bgBaselineMs=${BG_BASELINE_MS:60000}&bgConnectTimeoutMs=${BG_CONNECT_TIMEOUT_MS:30000}&bgSwitchoverTimeoutMs=${BG_SWITCHOVER_TIMEOUT_MS:180000}${JDBC_PARAMS:}
     username: ${RDS_USERNAME:admin}
     password: ${RDS_PASSWORD}
     hikari:
