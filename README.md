@@ -203,9 +203,9 @@ The `bg` plugin monitors Blue/Green deployment status and manages traffic during
 | POST | `BG_HIGH_MS` | Monitoring DNS updates |
 | COMPLETED | `BG_BASELINE_MS` | Normal operation resumed |
 
-**Race Condition Warning**: During the transition to IN_PROGRESS phase, there's a brief window where SQL requests may execute before the suspend rules take effect. This can result in `read-only` errors if the request hits the old (blue) cluster after it becomes read-only.
-
-**Important**: For non-admin database users, ensure proper permissions are granted on BOTH blue and green clusters before switchover. See [Connecting with non-admin users](https://github.com/aws/aws-advanced-jdbc-wrapper/blob/main/docs/using-the-jdbc-driver/using-plugins/UsingTheBlueGreenPlugin.md#connecting-with-non-admin-users) for required permissions.
+**Important Prerequisites**:
+- Ensure the test application has **network access to the green cluster**. The green cluster runs on different instances with different IP addresses.
+- For non-admin database users, ensure proper permissions are granted on **BOTH** blue and green clusters before switchover. See [Connecting with non-admin users](https://github.com/aws/aws-advanced-jdbc-wrapper/blob/main/docs/using-the-jdbc-driver/using-plugins/UsingTheBlueGreenPlugin.md#connecting-with-non-admin-users) for required permissions.
 
 ## Project Structure
 
