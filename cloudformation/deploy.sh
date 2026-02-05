@@ -351,8 +351,11 @@ create_bluegreen() {
     echo ""
 
     ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+    
+    local success_count=0
+    local skip_count=0
 
-    for i in $(seq 1 $CLUSTER_COUNT); do
+    for i in $(seq 1 3); do
         CLUSTER="${STACK_NAME}-cluster-$i"
         
         STATUS=$(aws rds describe-db-clusters \
@@ -361,8 +364,13 @@ create_bluegreen() {
             --output text \
             --region "$REGION" 2>/dev/null || echo "not-found")
         
+        if [ "$STATUS" = "not-found" ] || [ -z "$STATUS" ]; then
+            continue
+        fi
+        
         if [ "$STATUS" != "available" ]; then
             echo -e "${YELLOW}Skipping $CLUSTER (status: $STATUS)${NC}"
+            skip_count=$((skip_count + 1))
             continue
         fi
 
@@ -387,8 +395,16 @@ create_bluegreen() {
         }
         
         echo -e "${GREEN}  ✅ Created: $BG_ID${NC}"
+        success_count=$((success_count + 1))
     done
 
+    echo ""
+    if [ $success_count -eq 0 ]; then
+        echo -e "${RED}No Blue/Green deployments were created.${NC}"
+    else
+        echo -e "${GREEN}✅ Created $success_count Blue/Green deployment(s)${NC}"
+    fi
+    [ $skip_count -gt 0 ] && echo -e "${YELLOW}Skipped $skip_count cluster(s) (not available)${NC}"
     echo ""
     echo -e "${YELLOW}Blue/Green deployments take 10-30 minutes.${NC}"
 }
