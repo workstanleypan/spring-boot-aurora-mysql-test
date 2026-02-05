@@ -826,17 +826,32 @@ delete_all() {
             aws rds delete-db-instance \
                 --db-instance-identifier "$INSTANCE" \
                 --skip-final-snapshot \
-                --region "$REGION" 2>/dev/null &
-        done
-        wait
-        
-        echo "  Waiting for instances to be deleted (this may take 5-10 minutes)..."
-        for INSTANCE in $INSTANCES; do
-            echo "    Waiting for: $INSTANCE"
-            aws rds wait db-instance-deleted \
-                --db-instance-identifier "$INSTANCE" \
                 --region "$REGION" 2>/dev/null || true
         done
+        
+        echo "  Waiting for instances to be deleted (timeout: 10 min)..."
+        local instance_wait=0
+        local instance_max_wait=600  # 10 minutes
+        
+        while [ $instance_wait -lt $instance_max_wait ]; do
+            REMAINING_INSTANCES=$(aws rds describe-db-instances \
+                --query "DBInstances[?contains(DBClusterIdentifier, \`$STACK_NAME\`)].DBInstanceIdentifier" \
+                --output text \
+                --region "$REGION" 2>/dev/null || echo "")
+            
+            if [ -z "$REMAINING_INSTANCES" ] || [ "$REMAINING_INSTANCES" = "None" ]; then
+                echo "  All instances deleted"
+                break
+            fi
+            
+            echo "    Still deleting: $REMAINING_INSTANCES ($instance_wait seconds)"
+            sleep 30
+            instance_wait=$((instance_wait + 30))
+        done
+        
+        if [ $instance_wait -ge $instance_max_wait ]; then
+            echo -e "${YELLOW}  Warning: Instance deletion timed out. Continuing with cluster deletion...${NC}"
+        fi
     else
         echo "  No DB instances found"
     fi
@@ -871,13 +886,30 @@ delete_all() {
                 --region "$REGION" 2>/dev/null || true
         done
         
-        echo "  Waiting for clusters to be deleted..."
-        for CLUSTER in $CLUSTERS; do
-            echo "    Waiting for: $CLUSTER"
-            aws rds wait db-cluster-deleted \
-                --db-cluster-identifier "$CLUSTER" \
-                --region "$REGION" 2>/dev/null || true
+        echo "  Waiting for clusters to be deleted (timeout: 10 min)..."
+        local cluster_wait=0
+        local cluster_max_wait=600  # 10 minutes
+        
+        while [ $cluster_wait -lt $cluster_max_wait ]; do
+            REMAINING_CLUSTERS=$(aws rds describe-db-clusters \
+                --query "DBClusters[?contains(DBClusterIdentifier, \`$STACK_NAME\`)].DBClusterIdentifier" \
+                --output text \
+                --region "$REGION" 2>/dev/null || echo "")
+            
+            if [ -z "$REMAINING_CLUSTERS" ] || [ "$REMAINING_CLUSTERS" = "None" ]; then
+                echo "  All clusters deleted"
+                break
+            fi
+            
+            echo "    Still deleting: $REMAINING_CLUSTERS ($cluster_wait seconds)"
+            sleep 30
+            cluster_wait=$((cluster_wait + 30))
         done
+        
+        if [ $cluster_wait -ge $cluster_max_wait ]; then
+            echo -e "${YELLOW}  Warning: Cluster deletion timed out. Clusters may still be deleting in background.${NC}"
+            echo -e "${YELLOW}  Check status: aws rds describe-db-clusters --region $REGION${NC}"
+        fi
     else
         echo "  No DB clusters found"
     fi
