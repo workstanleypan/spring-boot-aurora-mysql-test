@@ -440,6 +440,7 @@ create_bluegreen() {
     
     local success_count=0
     local skip_count=0
+    local exists_count=0
 
     for i in $(seq 1 3); do
         CLUSTER="${STACK_NAME}-cluster-$i"
@@ -457,6 +458,18 @@ create_bluegreen() {
         if [ "$STATUS" != "available" ]; then
             echo -e "${YELLOW}Skipping $CLUSTER (status: $STATUS)${NC}"
             skip_count=$((skip_count + 1))
+            continue
+        fi
+
+        # Check if Blue/Green deployment already exists
+        BG_EXISTS=$(aws rds describe-blue-green-deployments \
+            --query "BlueGreenDeployments[?BlueGreenDeploymentName==\`${STACK_NAME}-bg-$i\`].Status" \
+            --output text \
+            --region "$REGION" 2>/dev/null || echo "")
+        
+        if [ -n "$BG_EXISTS" ] && [ "$BG_EXISTS" != "None" ]; then
+            echo -e "${CYAN}Blue/Green for $CLUSTER already exists (status: $BG_EXISTS)${NC}"
+            exists_count=$((exists_count + 1))
             continue
         fi
 
@@ -487,12 +500,12 @@ create_bluegreen() {
     done
 
     echo ""
-    if [ $success_count -eq 0 ]; then
-        echo -e "${RED}No Blue/Green deployments were created.${NC}"
-        return 1
+    if [ $success_count -gt 0 ]; then
+        echo -e "${GREEN}✅ Created $success_count Blue/Green deployment(s)${NC}"
     fi
-    
-    echo -e "${GREEN}✅ Created $success_count Blue/Green deployment(s)${NC}"
+    if [ $exists_count -gt 0 ]; then
+        echo -e "${CYAN}ℹ️  $exists_count Blue/Green deployment(s) already exist${NC}"
+    fi
     [ $skip_count -gt 0 ] && echo -e "${YELLOW}Skipped $skip_count cluster(s) (not available)${NC}"
     
     # Check if we need to modify Green instance class
@@ -516,13 +529,13 @@ create_bluegreen() {
 # Wait for Green instances and modify their class
 #==============================================================================
 wait_and_modify_green_instances() {
-    local max_wait=1800  # 30 minutes max
+    local max_wait=3600  # 60 minutes max (increased from 30)
     local waited=0
     local check_interval=30
     local green_found=false
     
     echo ""
-    echo "Waiting for Green instances to be created..."
+    echo "Waiting for Green instances to be created (timeout: ${max_wait}s / $((max_wait/60)) min)..."
     
     while [ $waited -lt $max_wait ]; do
         # Find Green instances
@@ -536,33 +549,35 @@ wait_and_modify_green_instances() {
             
             # Check if all Green instances are available
             local all_available=true
+            local available_count=0
+            local total_count=0
+            
             for INSTANCE in $GREEN_INSTANCES; do
+                total_count=$((total_count + 1))
                 INSTANCE_STATUS=$(aws rds describe-db-instances \
                     --db-instance-identifier "$INSTANCE" \
                     --query 'DBInstances[0].DBInstanceStatus' \
                     --output text \
                     --region "$REGION" 2>/dev/null || echo "unknown")
                 
-                if [ "$INSTANCE_STATUS" != "available" ]; then
+                if [ "$INSTANCE_STATUS" = "available" ]; then
+                    available_count=$((available_count + 1))
+                else
                     all_available=false
-                    break
                 fi
             done
             
             if [ "$all_available" = true ]; then
                 echo ""
-                echo -e "${GREEN}Green instances are available!${NC}"
+                echo -e "${GREEN}All $total_count Green instance(s) are available!${NC}"
                 echo ""
                 
                 # Now modify the instances
                 modify_green_instances
                 return 0
+            else
+                echo "  Green instances: $available_count/$total_count available... ($waited seconds)"
             fi
-        fi
-        
-        # Show progress
-        if [ "$green_found" = true ]; then
-            echo "  Green instances found, waiting for 'available' status... ($waited seconds)"
         else
             echo "  Waiting for Green instances to be created... ($waited seconds)"
         fi
@@ -572,7 +587,7 @@ wait_and_modify_green_instances() {
     done
     
     echo ""
-    echo -e "${YELLOW}Timeout waiting for Green instances.${NC}"
+    echo -e "${YELLOW}Timeout waiting for Green instances (${max_wait}s).${NC}"
     echo "You can manually run: ./deploy.sh modify-green"
     return 1
 }
