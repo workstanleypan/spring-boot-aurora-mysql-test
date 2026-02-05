@@ -244,6 +244,7 @@ spring-boot-aurora-mysql-test/
 
 ## Documentation
 
+- [EC2 Setup Guide](docs/EC2_SETUP_GUIDE.md) - Setup test environment on AL2023
 - [Aurora Configuration Guide](docs/AURORA_CONFIGURATION_GUIDE.md)
 - [Aurora Quick Start](docs/AURORA_QUICK_START.md)
 - [Blue/Green Test Guide](docs/BLUEGREEN_TEST_GUIDE.md)
