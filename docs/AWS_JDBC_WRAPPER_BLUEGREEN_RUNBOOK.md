@@ -391,10 +391,10 @@ curl -X POST http://localhost:8080/api/bluegreen/stop
 
 | Metric | Target | Description |
 |--------|--------|-------------|
-| Success Rate | > 95% | Percentage of successful writes |
+| Success Rate | > 99% | Percentage of successful writes |
 | Failover Detection | Yes | Plugin correctly identifies switchover |
 | Auto Recovery | Yes | Writes resume after switchover |
-| Read-Only Errors | Minimal | Temporary errors during transition |
+| Read-Only Errors | 0 | No read-only errors should occur with properly configured BG plugin |
 
 ---
 
