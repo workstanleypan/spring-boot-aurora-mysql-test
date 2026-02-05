@@ -785,7 +785,7 @@ delete_all() {
         done <<< "$BG_INFO"
         
         echo "  Waiting for Blue/Green deployments to be deleted..."
-        local max_wait=300  # 5 minutes max
+        local max_wait=600  # 10 minutes max
         local waited=0
         while [ $waited -lt $max_wait ]; do
             REMAINING=$(aws rds describe-blue-green-deployments \
@@ -829,9 +829,9 @@ delete_all() {
                 --region "$REGION" 2>/dev/null || true
         done
         
-        echo "  Waiting for instances to be deleted (timeout: 10 min)..."
+        echo "  Waiting for instances to be deleted (timeout: 15 min)..."
         local instance_wait=0
-        local instance_max_wait=600  # 10 minutes
+        local instance_max_wait=900  # 15 minutes
         
         while [ $instance_wait -lt $instance_max_wait ]; do
             REMAINING_INSTANCES=$(aws rds describe-db-instances \
@@ -886,9 +886,9 @@ delete_all() {
                 --region "$REGION" 2>/dev/null || true
         done
         
-        echo "  Waiting for clusters to be deleted (timeout: 10 min)..."
+        echo "  Waiting for clusters to be deleted (timeout: 15 min)..."
         local cluster_wait=0
-        local cluster_max_wait=600  # 10 minutes
+        local cluster_max_wait=900  # 15 minutes
         
         while [ $cluster_wait -lt $cluster_max_wait ]; do
             REMAINING_CLUSTERS=$(aws rds describe-db-clusters \
