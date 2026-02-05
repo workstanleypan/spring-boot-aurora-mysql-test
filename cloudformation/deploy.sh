@@ -519,8 +519,29 @@ delete_all() {
                 --delete-target \
                 --region "$REGION" 2>/dev/null || true
         done
-        echo "  Waiting for Blue/Green deletions..."
-        sleep 10
+        
+        echo "  Waiting for Blue/Green deployments to be deleted..."
+        local max_wait=300  # 5 minutes max
+        local waited=0
+        while [ $waited -lt $max_wait ]; do
+            REMAINING=$(aws rds describe-blue-green-deployments \
+                --query "BlueGreenDeployments[?contains(BlueGreenDeploymentName, \`$STACK_NAME\`)].BlueGreenDeploymentIdentifier" \
+                --output text \
+                --region "$REGION" 2>/dev/null || echo "")
+            
+            if [ -z "$REMAINING" ] || [ "$REMAINING" = "None" ]; then
+                echo "  All Blue/Green deployments deleted"
+                break
+            fi
+            
+            echo "    Still waiting... ($waited seconds)"
+            sleep 15
+            waited=$((waited + 15))
+        done
+        
+        if [ $waited -ge $max_wait ]; then
+            echo -e "${YELLOW}  Warning: Blue/Green deletion timed out, continuing anyway...${NC}"
+        fi
     else
         echo "  No Blue/Green deployments found"
     fi
