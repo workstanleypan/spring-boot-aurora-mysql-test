@@ -50,7 +50,7 @@
         <!-- AWS JDBC Wrapper - 详细日志 -->
         <!-- JUL FINEST = TRACE, FINE = DEBUG, INFO = INFO -->
         <!-- 生产环境推荐 DEBUG (FINE)，测试环境推荐 TRACE (FINEST) -->
-        <Logger name="software.amazon.jdbc" level="DEBUG" additivity="false">
+        <Logger name="software.amazon.jdbc" level="TRACE" additivity="false">
             <AppenderRef ref="Console"/>
             <AppenderRef ref="WrapperFile"/>
             <AppenderRef ref="RollingFile"/>
