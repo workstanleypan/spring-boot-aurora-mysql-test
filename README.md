@@ -129,13 +129,26 @@ curl -X POST "http://localhost:8080/api/bluegreen/start-write?numConnections=20&
 
 ### Environment Variables
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `AURORA_CLUSTER_ENDPOINT` | Yes | Aurora cluster endpoint |
-| `AURORA_DATABASE` | Yes | Database name |
-| `AURORA_USERNAME` | Yes | Database username |
-| `AURORA_PASSWORD` | Yes | Database password |
-| `WRAPPER_LOG_LEVEL` | No | Log level (default: INFO) |
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `AURORA_CLUSTER_ENDPOINT` | Yes | - | Aurora cluster endpoint |
+| `AURORA_DATABASE` | Yes | - | Database name |
+| `AURORA_USERNAME` | Yes | - | Database username |
+| `AURORA_PASSWORD` | Yes | - | Database password |
+| `WRAPPER_LOG_LEVEL` | No | INFO | Log level (SEVERE\|WARNING\|INFO\|FINE\|FINER\|FINEST) |
+| `BGD_ID` | No | cluster-a | Blue/Green deployment identifier |
+
+### Blue/Green Plugin Parameters
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `BG_HIGH_MS` | 100 | Status polling interval (ms) during IN_PROGRESS phase |
+| `BG_INCREASED_MS` | 1000 | Status polling interval (ms) during CREATED phase |
+| `BG_BASELINE_MS` | 60000 | Status polling interval (ms) during normal operation |
+| `BG_CONNECT_TIMEOUT_MS` | 30000 | Connection timeout (ms) during switchover |
+| `BG_SWITCHOVER_TIMEOUT_MS` | 180000 | Total switchover timeout (ms) |
+
+**Note on `BG_HIGH_MS`**: Reducing this value (e.g., to 50ms) can decrease the probability of race conditions during switchover, but cannot completely eliminate them. The race condition window is approximately `BG_HIGH_MS + query_time + processing_time` (~75ms when BG_HIGH_MS=50).
 
 ### Application Profiles
 
@@ -163,6 +176,21 @@ jdbc:aws-wrapper:mysql://<cluster-endpoint>:3306/<database>?characterEncoding=ut
 | `failover2` | Automatic failover |
 | `efm2` | Enhanced failure monitoring |
 | `bg` | Blue/Green deployment support |
+
+### Blue/Green Plugin Behavior
+
+The `bg` plugin monitors Blue/Green deployment status and manages traffic during switchover:
+
+| Phase | Polling Interval | Behavior |
+|-------|-----------------|----------|
+| NOT_CREATED | `BG_BASELINE_MS` | Normal operation |
+| CREATED | `BG_INCREASED_MS` | Collecting topology and IP addresses |
+| PREPARATION | `BG_HIGH_MS` | Substituting hostnames with IP addresses |
+| IN_PROGRESS | `BG_HIGH_MS` | **Suspending all SQL requests** |
+| POST | `BG_HIGH_MS` | Monitoring DNS updates |
+| COMPLETED | `BG_BASELINE_MS` | Normal operation resumed |
+
+**Race Condition Warning**: During the transition to IN_PROGRESS phase, there's a brief window where SQL requests may execute before the suspend rules take effect. This can result in `read-only` errors if the request hits the old (blue) cluster after it becomes read-only.
 
 ## Project Structure
 
