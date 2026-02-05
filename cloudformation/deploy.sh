@@ -302,7 +302,7 @@ init_db() {
         
         echo "Creating test users and tables..."
         
-        if mysql -h "$ENDPOINT" -u "$DB_USERNAME" -p"$DB_PASSWORD" < "$SQL_FILE" 2>/dev/null; then
+        if mysql -h "$ENDPOINT" -u "$DB_USERNAME" -p"$DB_PASSWORD" < "$SQL_FILE" > /dev/null 2>&1; then
             echo -e "${GREEN}  ✅ Cluster $i initialized!${NC}"
             ((success_count++))
         else
