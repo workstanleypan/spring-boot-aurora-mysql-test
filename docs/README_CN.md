@@ -18,6 +18,8 @@ Spring Boot 应用，用于测试 AWS JDBC Wrapper 连接 Aurora MySQL，支持 
 - AWS CLI（用于 CloudFormation 部署）
 - Aurora MySQL 集群访问权限
 
+> 📖 **新环境搭建**: 如果在全新的 Amazon Linux 2023 EC2 上搭建测试环境，请参考 [EC2 环境搭建指南](EC2_SETUP_GUIDE.md)
+
 ## 快速开始
 
 ### 1. 克隆并编译
@@ -201,6 +203,7 @@ spring-boot-aurora-mysql-test/
 
 ## 文档
 
+- [EC2 环境搭建指南](EC2_SETUP_GUIDE.md) - 在 AL2023 上搭建测试环境
 - [Aurora 配置指南](AURORA_CONFIGURATION_GUIDE.md)
 - [Aurora 快速开始](AURORA_QUICK_START.md)
 - [Blue/Green 测试指南](BLUEGREEN_TEST_GUIDE.md)
