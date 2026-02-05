@@ -432,10 +432,8 @@ create_bluegreen() {
     echo ""
     echo -e "${CYAN}Stack Name: $STACK_NAME${NC}"
     echo "Target Version:     $TARGET_VERSION"
-    echo ""
-    echo -e "${YELLOW}Note: Aurora clusters don't support --target-db-instance-class.${NC}"
-    echo -e "${YELLOW}Green cluster will use the same instance class as Blue.${NC}"
-    echo -e "${YELLOW}To change Green instance class, modify after BG deployment is created.${NC}"
+    echo "Blue Instance:      $BLUE_INSTANCE_CLASS"
+    echo "Green Instance:     $GREEN_INSTANCE_CLASS"
     echo ""
 
     ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
@@ -491,16 +489,92 @@ create_bluegreen() {
     echo ""
     if [ $success_count -eq 0 ]; then
         echo -e "${RED}No Blue/Green deployments were created.${NC}"
-    else
-        echo -e "${GREEN}✅ Created $success_count Blue/Green deployment(s)${NC}"
-        echo ""
-        echo "To change Green cluster instance class after creation:"
-        echo "  aws rds modify-db-instance --db-instance-identifier <green-instance> \\"
-        echo "      --db-instance-class $GREEN_INSTANCE_CLASS --apply-immediately"
+        return 1
     fi
+    
+    echo -e "${GREEN}✅ Created $success_count Blue/Green deployment(s)${NC}"
     [ $skip_count -gt 0 ] && echo -e "${YELLOW}Skipped $skip_count cluster(s) (not available)${NC}"
+    
+    # Check if we need to modify Green instance class
+    if [ "$BLUE_INSTANCE_CLASS" != "$GREEN_INSTANCE_CLASS" ]; then
+        echo ""
+        echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${CYAN}Waiting for Green instances to be created...${NC}"
+        echo -e "${CYAN}Will modify: $BLUE_INSTANCE_CLASS -> $GREEN_INSTANCE_CLASS${NC}"
+        echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        
+        # Wait for Green instances to appear and become available
+        wait_and_modify_green_instances
+    else
+        echo ""
+        echo -e "${YELLOW}Blue/Green deployments take 10-30 minutes to be ready.${NC}"
+        echo "Check status: ./deploy.sh status"
+    fi
+}
+
+#==============================================================================
+# Wait for Green instances and modify their class
+#==============================================================================
+wait_and_modify_green_instances() {
+    local max_wait=1800  # 30 minutes max
+    local waited=0
+    local check_interval=30
+    local green_found=false
+    
     echo ""
-    echo -e "${YELLOW}Blue/Green deployments take 10-30 minutes.${NC}"
+    echo "Waiting for Green instances to be created..."
+    
+    while [ $waited -lt $max_wait ]; do
+        # Find Green instances
+        GREEN_INSTANCES=$(aws rds describe-db-instances \
+            --query "DBInstances[?contains(DBInstanceIdentifier, \`${STACK_NAME}\`) && contains(DBInstanceIdentifier, \`-green-\`)].DBInstanceIdentifier" \
+            --output text \
+            --region "$REGION" 2>/dev/null || echo "")
+        
+        if [ -n "$GREEN_INSTANCES" ] && [ "$GREEN_INSTANCES" != "None" ]; then
+            green_found=true
+            
+            # Check if all Green instances are available
+            local all_available=true
+            for INSTANCE in $GREEN_INSTANCES; do
+                INSTANCE_STATUS=$(aws rds describe-db-instances \
+                    --db-instance-identifier "$INSTANCE" \
+                    --query 'DBInstances[0].DBInstanceStatus' \
+                    --output text \
+                    --region "$REGION" 2>/dev/null || echo "unknown")
+                
+                if [ "$INSTANCE_STATUS" != "available" ]; then
+                    all_available=false
+                    break
+                fi
+            done
+            
+            if [ "$all_available" = true ]; then
+                echo ""
+                echo -e "${GREEN}Green instances are available!${NC}"
+                echo ""
+                
+                # Now modify the instances
+                modify_green_instances
+                return 0
+            fi
+        fi
+        
+        # Show progress
+        if [ "$green_found" = true ]; then
+            echo "  Green instances found, waiting for 'available' status... ($waited seconds)"
+        else
+            echo "  Waiting for Green instances to be created... ($waited seconds)"
+        fi
+        
+        sleep $check_interval
+        waited=$((waited + check_interval))
+    done
+    
+    echo ""
+    echo -e "${YELLOW}Timeout waiting for Green instances.${NC}"
+    echo "You can manually run: ./deploy.sh modify-green"
+    return 1
 }
 
 #==============================================================================
