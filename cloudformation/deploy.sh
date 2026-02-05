@@ -307,10 +307,10 @@ init_db() {
         
         if mysql -h "$ENDPOINT" -u "$DB_USERNAME" -p"$DB_PASSWORD" < "$SQL_FILE" > /dev/null 2>&1; then
             echo -e "${GREEN}  ✅ Cluster $i initialized!${NC}"
-            ((success_count++))
+            success_count=$((success_count + 1))
         else
             echo -e "${RED}  ❌ Cluster $i failed${NC}"
-            ((fail_count++))
+            fail_count=$((fail_count + 1))
         fi
         echo ""
     done
