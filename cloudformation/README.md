@@ -53,16 +53,34 @@ ENGINE_VERSION=8.0.mysql_aurora.3.04.2    # Blue version
 TARGET_VERSION=8.0.mysql_aurora.3.10.3    # Green target version
 NEW_STACK=true                # true=create new stack, false=update existing
 
+# Instance Class Configuration
+BLUE_INSTANCE_CLASS=db.r6g.large      # Blue (source) cluster
+GREEN_INSTANCE_CLASS=db.r6g.xlarge    # Green (target) cluster - larger for faster binlog catchup
+
 # Database
 DB_PASSWORD=YourPassword      # Required
 DB_USERNAME=admin
 DB_NAME=testdb
-INSTANCE_CLASS=db.t3.medium
 
 # VPC (auto-detects default VPC)
 USE_EXISTING_VPC=true
 VPC_ID=                       # Leave empty for auto-detection
 ```
+
+## Instance Class Strategy
+
+The Green cluster can use a larger instance class than Blue to speed up binlog replication during switchover:
+
+| Scenario | Blue Instance | Green Instance | Benefit |
+|----------|---------------|----------------|---------|
+| Cost-optimized | db.r6g.large | db.r6g.large | Same cost |
+| Fast switchover | db.r6g.large | db.r6g.xlarge | 2x faster binlog catchup |
+| High-load production | db.r6g.xlarge | db.r6g.2xlarge | Minimal switchover time |
+
+**Why larger Green instance?**
+- Binlog replication speed is limited by the **target (Green)** cluster's resources
+- More vCPUs = more `replica_parallel_workers` = faster binlog catchup
+- After switchover, you can downgrade the instance if needed
 
 ## Command Line Examples
 
@@ -117,6 +135,8 @@ ENGINE_VERSION=8.0.mysql_aurora.3.08.0 DB_PASSWORD=MyPass ./deploy.sh deploy
 | `DB_PASSWORD` | - | Database password (required) |
 | `CLUSTER_COUNT` | 1 | Number of clusters (1-3) |
 | `INSTANCES_PER_CLUSTER` | 2 | Instances per cluster |
+| `BLUE_INSTANCE_CLASS` | db.r6g.large | Blue cluster instance class |
+| `GREEN_INSTANCE_CLASS` | db.r6g.xlarge | Green cluster instance class |
 
 ## Test Users
 

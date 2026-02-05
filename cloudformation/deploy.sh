@@ -59,7 +59,10 @@ load_config() {
     DB_USERNAME="${DB_USERNAME:-admin}"
     DB_PASSWORD="${DB_PASSWORD:-}"
     DB_NAME="${DB_NAME:-testdb}"
-    INSTANCE_CLASS="${INSTANCE_CLASS:-db.t3.medium}"
+    
+    # Instance class configuration
+    BLUE_INSTANCE_CLASS="${BLUE_INSTANCE_CLASS:-db.r6g.large}"
+    GREEN_INSTANCE_CLASS="${GREEN_INSTANCE_CLASS:-db.r6g.xlarge}"
     
     # Cluster configuration
     CLUSTER_COUNT="${CLUSTER_COUNT:-1}"
@@ -126,7 +129,10 @@ show_config() {
     echo "Instances/Each:  $INSTANCES_PER_CLUSTER"
     echo "Engine Version:  $ENGINE_VERSION"
     echo "Target Version:  $TARGET_VERSION"
-    echo "Instance Class:  $INSTANCE_CLASS"
+    echo ""
+    echo "Instance Classes:"
+    echo "  Blue (Source):  $BLUE_INSTANCE_CLASS"
+    echo "  Green (Target): $GREEN_INSTANCE_CLASS"
     echo ""
     echo "VPC:             ${VPC_ID:-<auto-detect default>}"
     echo "Database:        $DB_NAME"
@@ -223,6 +229,8 @@ deploy_stack() {
     echo "  Clusters:     $CLUSTER_COUNT"
     echo "  Instances:    $INSTANCES_PER_CLUSTER per cluster"
     echo "  Version:      $ENGINE_VERSION"
+    echo "  Blue Class:   $BLUE_INSTANCE_CLASS"
+    echo "  Green Class:  $GREEN_INSTANCE_CLASS (for Blue/Green deployment)"
     echo "  VPC:          $VPC_ID"
     echo "  VPC CIDR:     $VPC_CIDR (security group)"
     echo "  Public IP:    DISABLED"
@@ -239,7 +247,8 @@ deploy_stack() {
             ClusterCount="$CLUSTER_COUNT" \
             InstancesPerCluster="$INSTANCES_PER_CLUSTER" \
             EngineVersion="$ENGINE_VERSION" \
-            InstanceClass="$INSTANCE_CLASS" \
+            BlueInstanceClass="$BLUE_INSTANCE_CLASS" \
+            GreenInstanceClass="$GREEN_INSTANCE_CLASS" \
             UseExistingVpc="$USE_EXISTING_VPC" \
             VpcId="$VPC_ID" \
             VpcCidr="$VPC_CIDR" \
@@ -347,7 +356,8 @@ create_bluegreen() {
     echo "╚══════════════════════════════════════════════════════════════╝"
     echo ""
     echo -e "${CYAN}Stack Name: $STACK_NAME${NC}"
-    echo "Target Version: $TARGET_VERSION"
+    echo "Target Version:     $TARGET_VERSION"
+    echo "Green Instance:     $GREEN_INSTANCE_CLASS"
     echo ""
 
     ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
@@ -381,12 +391,14 @@ create_bluegreen() {
             --region "$REGION")
 
         echo "Creating Blue/Green for $CLUSTER"
-        echo "  $CURRENT -> $TARGET_VERSION"
+        echo "  Version: $CURRENT -> $TARGET_VERSION"
+        echo "  Green Instance Class: $GREEN_INSTANCE_CLASS"
 
         BG_ID=$(aws rds create-blue-green-deployment \
             --blue-green-deployment-name "${STACK_NAME}-bg-$i" \
             --source "arn:aws:rds:${REGION}:${ACCOUNT_ID}:cluster:${CLUSTER}" \
             --target-engine-version "$TARGET_VERSION" \
+            --target-db-instance-class "$GREEN_INSTANCE_CLASS" \
             --query 'BlueGreenDeployment.BlueGreenDeploymentIdentifier' \
             --output text \
             --region "$REGION" 2>&1) || {
@@ -403,6 +415,9 @@ create_bluegreen() {
         echo -e "${RED}No Blue/Green deployments were created.${NC}"
     else
         echo -e "${GREEN}✅ Created $success_count Blue/Green deployment(s)${NC}"
+        echo ""
+        echo "Green cluster will use: $GREEN_INSTANCE_CLASS"
+        echo "  (Larger instance = faster binlog catchup = faster switchover)"
     fi
     [ $skip_count -gt 0 ] && echo -e "${YELLOW}Skipped $skip_count cluster(s) (not available)${NC}"
     echo ""

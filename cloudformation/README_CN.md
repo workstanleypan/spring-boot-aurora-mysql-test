@@ -53,16 +53,34 @@ ENGINE_VERSION=8.0.mysql_aurora.3.04.2    # Blue 版本
 TARGET_VERSION=8.0.mysql_aurora.3.10.3    # Green 目标版本
 NEW_STACK=true                # true=创建新 stack，false=更新现有
 
+# 实例类型配置
+BLUE_INSTANCE_CLASS=db.r6g.large      # Blue（源）集群
+GREEN_INSTANCE_CLASS=db.r6g.xlarge    # Green（目标）集群 - 更大机型加速 binlog 追赶
+
 # 数据库
 DB_PASSWORD=YourPassword      # 必填
 DB_USERNAME=admin
 DB_NAME=testdb
-INSTANCE_CLASS=db.t3.medium
 
 # VPC（自动检测默认 VPC）
 USE_EXISTING_VPC=true
 VPC_ID=                       # 留空自动检测
 ```
+
+## 实例类型策略
+
+Green 集群可以使用比 Blue 更大的实例类型，以加速切换期间的 binlog 复制：
+
+| 场景 | Blue 实例 | Green 实例 | 优势 |
+|------|-----------|------------|------|
+| 成本优化 | db.r6g.large | db.r6g.large | 相同成本 |
+| 快速切换 | db.r6g.large | db.r6g.xlarge | binlog 追赶速度提升 2 倍 |
+| 高负载生产 | db.r6g.xlarge | db.r6g.2xlarge | 最小化切换时间 |
+
+**为什么使用更大的 Green 实例？**
+- Binlog 复制速度受限于**目标（Green）**集群的资源
+- 更多 vCPU = 更多 `replica_parallel_workers` = 更快的 binlog 追赶
+- 切换完成后，可以根据需要降低实例规格
 
 ## 命令行示例
 
@@ -117,6 +135,8 @@ ENGINE_VERSION=8.0.mysql_aurora.3.08.0 DB_PASSWORD=MyPass ./deploy.sh deploy
 | `DB_PASSWORD` | - | 数据库密码（必填） |
 | `CLUSTER_COUNT` | 1 | 集群数量 (1-3) |
 | `INSTANCES_PER_CLUSTER` | 2 | 每集群实例数 |
+| `BLUE_INSTANCE_CLASS` | db.r6g.large | Blue 集群实例类型 |
+| `GREEN_INSTANCE_CLASS` | db.r6g.xlarge | Green 集群实例类型 |
 
 ## 测试用户
 

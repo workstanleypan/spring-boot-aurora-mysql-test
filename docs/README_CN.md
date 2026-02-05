@@ -17,6 +17,7 @@ Spring Boot 应用，用于测试 AWS JDBC Wrapper 连接 Aurora MySQL，支持 
 - Maven 3.6+
 - AWS CLI（用于 CloudFormation 部署）
 - Aurora MySQL 集群访问权限
+- MySQL 客户端（用于数据库初始化）
 
 > 📖 **新环境搭建**: 如果在全新的 Amazon Linux 2023 EC2 上搭建测试环境，请参考 [EC2 环境搭建指南](EC2_SETUP_GUIDE.md)
 

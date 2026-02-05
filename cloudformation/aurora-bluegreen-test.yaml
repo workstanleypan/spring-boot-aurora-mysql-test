@@ -61,9 +61,31 @@ Parameters:
     Type: String
     Default: '8.0.mysql_aurora.3.04.2'
 
-  InstanceClass:
+  # Blue Cluster (Source) Instance Class
+  BlueInstanceClass:
     Type: String
-    Default: db.t3.medium
+    Default: db.r6g.large
+    AllowedValues:
+      - db.t3.medium
+      - db.t3.large
+      - db.r6g.large
+      - db.r6g.xlarge
+      - db.r6g.2xlarge
+      - db.r6g.4xlarge
+    Description: Instance class for Blue (source) cluster - production workload
+
+  # Green Cluster (Target) Instance Class  
+  GreenInstanceClass:
+    Type: String
+    Default: db.r6g.xlarge
+    AllowedValues:
+      - db.t3.medium
+      - db.t3.large
+      - db.r6g.large
+      - db.r6g.xlarge
+      - db.r6g.2xlarge
+      - db.r6g.4xlarge
+    Description: Instance class for Green (target) cluster - larger for faster binlog catchup
 
 Conditions:
   CreateNewVpc: !Equals [!Ref UseExistingVpc, 'false']
@@ -215,7 +237,7 @@ Resources:
     Properties:
       DBInstanceIdentifier: !Sub ${EnvironmentName}-cluster-1-instance-1
       DBClusterIdentifier: !Ref Cluster1
-      DBInstanceClass: !Ref InstanceClass
+      DBInstanceClass: !Ref BlueInstanceClass
       Engine: aurora-mysql
       PubliclyAccessible: false
 
@@ -225,7 +247,7 @@ Resources:
     Properties:
       DBInstanceIdentifier: !Sub ${EnvironmentName}-cluster-1-instance-2
       DBClusterIdentifier: !Ref Cluster1
-      DBInstanceClass: !Ref InstanceClass
+      DBInstanceClass: !Ref BlueInstanceClass
       Engine: aurora-mysql
       PubliclyAccessible: false
 
@@ -235,7 +257,7 @@ Resources:
     Properties:
       DBInstanceIdentifier: !Sub ${EnvironmentName}-cluster-1-instance-3
       DBClusterIdentifier: !Ref Cluster1
-      DBInstanceClass: !Ref InstanceClass
+      DBInstanceClass: !Ref BlueInstanceClass
       Engine: aurora-mysql
       PubliclyAccessible: false
 
@@ -266,7 +288,7 @@ Resources:
     Properties:
       DBInstanceIdentifier: !Sub ${EnvironmentName}-cluster-2-instance-1
       DBClusterIdentifier: !Ref Cluster2
-      DBInstanceClass: !Ref InstanceClass
+      DBInstanceClass: !Ref BlueInstanceClass
       Engine: aurora-mysql
       PubliclyAccessible: false
 
@@ -276,7 +298,7 @@ Resources:
     Properties:
       DBInstanceIdentifier: !Sub ${EnvironmentName}-cluster-2-instance-2
       DBClusterIdentifier: !Ref Cluster2
-      DBInstanceClass: !Ref InstanceClass
+      DBInstanceClass: !Ref BlueInstanceClass
       Engine: aurora-mysql
       PubliclyAccessible: false
 
@@ -286,7 +308,7 @@ Resources:
     Properties:
       DBInstanceIdentifier: !Sub ${EnvironmentName}-cluster-2-instance-3
       DBClusterIdentifier: !Ref Cluster2
-      DBInstanceClass: !Ref InstanceClass
+      DBInstanceClass: !Ref BlueInstanceClass
       Engine: aurora-mysql
       PubliclyAccessible: false
 
@@ -317,7 +339,7 @@ Resources:
     Properties:
       DBInstanceIdentifier: !Sub ${EnvironmentName}-cluster-3-instance-1
       DBClusterIdentifier: !Ref Cluster3
-      DBInstanceClass: !Ref InstanceClass
+      DBInstanceClass: !Ref BlueInstanceClass
       Engine: aurora-mysql
       PubliclyAccessible: false
 
@@ -327,7 +349,7 @@ Resources:
     Properties:
       DBInstanceIdentifier: !Sub ${EnvironmentName}-cluster-3-instance-2
       DBClusterIdentifier: !Ref Cluster3
-      DBInstanceClass: !Ref InstanceClass
+      DBInstanceClass: !Ref BlueInstanceClass
       Engine: aurora-mysql
       PubliclyAccessible: false
 
@@ -337,21 +359,19 @@ Resources:
     Properties:
       DBInstanceIdentifier: !Sub ${EnvironmentName}-cluster-3-instance-3
       DBClusterIdentifier: !Ref Cluster3
-      DBInstanceClass: !Ref InstanceClass
-      Engine: aurora-mysql
-      PubliclyAccessible: false
-
-  Cluster3Instance2:
-    Type: AWS::RDS::DBInstance
-    Condition: CreateCluster3
-    Properties:
-      DBInstanceIdentifier: !Sub ${EnvironmentName}-cluster-3-instance-2
-      DBClusterIdentifier: !Ref Cluster3
-      DBInstanceClass: !Ref InstanceClass
+      DBInstanceClass: !Ref BlueInstanceClass
       Engine: aurora-mysql
       PubliclyAccessible: false
 
 Outputs:
+  BlueInstanceClass:
+    Description: Blue (source) cluster instance class
+    Value: !Ref BlueInstanceClass
+
+  GreenInstanceClass:
+    Description: Green (target) cluster instance class for Blue/Green deployment
+    Value: !Ref GreenInstanceClass
+
   Cluster1Endpoint:
     Description: Cluster 1 Writer Endpoint
     Value: !GetAtt Cluster1.Endpoint.Address
@@ -374,6 +394,16 @@ Outputs:
     Description: Aurora Security Group ID
     Value: !Ref AuroraSecurityGroup
 
+  CreateBlueGreenDeploymentCommand:
+    Description: AWS CLI command to create Blue/Green deployment with specified Green instance class
+    Value: !Sub |
+      # Create Blue/Green deployment for Cluster 1 with Green instance class: ${GreenInstanceClass}
+      aws rds create-blue-green-deployment \
+        --blue-green-deployment-name ${EnvironmentName}-bg-deployment \
+        --source arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${EnvironmentName}-cluster-1 \
+        --target-db-instance-class ${GreenInstanceClass} \
+        --region ${AWS::Region}
+
   EnvConfig:
     Description: Environment configuration
     Value: !Sub |
@@ -381,3 +411,5 @@ Outputs:
       export AURORA_DATABASE="${DBName}"
       export AURORA_USERNAME="${DBUsername}"
       export AURORA_PASSWORD="<your-password>"
+      export BLUE_INSTANCE_CLASS="${BlueInstanceClass}"
+      export GREEN_INSTANCE_CLASS="${GreenInstanceClass}"
