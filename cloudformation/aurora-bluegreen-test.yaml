@@ -72,6 +72,10 @@ Parameters:
       - db.r6g.xlarge
       - db.r6g.2xlarge
       - db.r6g.4xlarge
+      - db.r8g.large
+      - db.r8g.xlarge
+      - db.r8g.2xlarge
+      - db.r8g.4xlarge
     Description: Instance class for Blue (source) cluster - production workload
 
   # Green Cluster (Target) Instance Class  
@@ -85,6 +89,10 @@ Parameters:
       - db.r6g.xlarge
       - db.r6g.2xlarge
       - db.r6g.4xlarge
+      - db.r8g.large
+      - db.r8g.xlarge
+      - db.r8g.2xlarge
+      - db.r8g.4xlarge
     Description: Instance class for Green (target) cluster - larger for faster binlog catchup
 
 Conditions:
