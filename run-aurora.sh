@@ -121,5 +121,20 @@ fi
 echo "📦 Using JAR: $JAR_FILE"
 echo ""
 
+# Archive old logs before starting
+LOG_DIR="logs"
+ARCHIVE_DIR="$LOG_DIR/archive"
+
+if [ -d "$LOG_DIR" ]; then
+    # Check if there are any log files to archive
+    if ls "$LOG_DIR"/*.log 1> /dev/null 2>&1; then
+        echo "📁 Archiving old logs..."
+        mkdir -p "$ARCHIVE_DIR"
+        mv "$LOG_DIR"/*.log "$ARCHIVE_DIR/" 2>/dev/null
+        echo "✅ Old logs moved to $ARCHIVE_DIR/"
+        echo ""
+    fi
+fi
+
 # Start application
 java -jar "$JAR_FILE" --spring.profiles.active="$PROFILE"

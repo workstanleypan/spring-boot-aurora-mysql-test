@@ -99,31 +99,36 @@ wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg
 
 ## View Logs
 
+每次启动应用会生成新的日志文件（带时间戳），旧日志自动归档到 `logs/archive/`。
+
 ```bash
-# Wrapper logs
-tail -f logs/wrapper.log
+# 当前测试的 Wrapper 日志
+tail -f logs/wrapper-*.log
 
-# Application logs
-tail -f logs/spring-boot.log
+# 当前测试的应用日志
+tail -f logs/spring-boot-*.log
 
-# BG Plugin related
-grep -i "blue.*green\|BlueGreen" logs/wrapper.log
+# BG Plugin 相关
+grep -i "blue.*green\|BlueGreen" logs/wrapper-*.log
 
-# Failover related
-grep -i "failover" logs/wrapper.log
+# Failover 相关
+grep -i "failover" logs/wrapper-*.log
+
+# 查看历史日志
+ls logs/archive/
 ```
 
 ### Analyze Switchover Results
 
 ```bash
 # View switchover timeline summary (FINE level and above)
-grep -i "time offset" logs/wrapper.log -A 14
+grep -i "time offset" logs/wrapper-*.log -A 14
 
 # Check BG status changes (FINE level)
-grep -i "BG status" logs/wrapper.log
+grep -i "BG status" logs/wrapper-*.log
 
 # Check BG status changes (FINEST level)
-grep -i "Status changed to" logs/wrapper.log
+grep -i "Status changed to" logs/wrapper-*.log
 ```
 
 ## Monitoring Metrics

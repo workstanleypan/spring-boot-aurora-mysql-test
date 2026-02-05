@@ -113,5 +113,34 @@ echo ""
 echo "🚀 Starting Spring Boot application..."
 echo ""
 
+# Archive old logs before starting
+LOG_DIR="logs"
+ARCHIVE_DIR="$LOG_DIR/archive"
+
+if [ -d "$LOG_DIR" ]; then
+    # Check if there are any log files to archive
+    if ls "$LOG_DIR"/*.log 1> /dev/null 2>&1; then
+        echo "📁 Archiving old logs..."
+        mkdir -p "$ARCHIVE_DIR"
+        mv "$LOG_DIR"/*.log "$ARCHIVE_DIR/" 2>/dev/null
+        echo "✅ Old logs moved to $ARCHIVE_DIR/"
+        echo ""
+    fi
+fi
+
 # Start application
-./run.sh "$PROFILE"
+JAR_FILE=$(ls -t target/*.jar 2>/dev/null | head -1)
+
+if [ -z "$JAR_FILE" ]; then
+    echo "❌ Error: No JAR file found in target/"
+    echo ""
+    echo "Please build the project first:"
+    echo "  mvn clean package -DskipTests"
+    echo ""
+    exit 1
+fi
+
+echo "📦 Using JAR: $JAR_FILE"
+echo ""
+
+java -jar "$JAR_FILE" --spring.profiles.active="$PROFILE"
