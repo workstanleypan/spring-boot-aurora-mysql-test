@@ -62,12 +62,23 @@ STACK_NAME=aurora-bg-test-0204-1530 ./deploy.sh outputs
 ### 3. Configure and Run
 
 ```bash
-# Set environment variables
+# Required environment variables
 export AURORA_CLUSTER_ENDPOINT="your-cluster.cluster-xxxxx.us-east-1.rds.amazonaws.com"
 export AURORA_DATABASE="testdb"
 export AURORA_USERNAME="admin"
 export AURORA_PASSWORD="your-password"
-export WRAPPER_LOG_LEVEL="FINE"  # Options: SEVERE|WARNING|INFO|FINE|FINER|FINEST
+
+# Optional: Logging and cluster identification
+export WRAPPER_LOG_LEVEL="FINE"    # SEVERE|WARNING|INFO|FINE|FINER|FINEST
+export CLUSTER_ID="cluster-a"      # Unique per cluster (multi-cluster scenarios)
+export BGD_ID="cluster-a"          # Unique per cluster (multi-cluster scenarios)
+
+# Optional: Blue/Green plugin tuning (see docs/PLUGIN_CONFIGURATION.md for details)
+export BG_HIGH_MS="100"            # Polling interval during IN_PROGRESS (ms)
+export BG_INCREASED_MS="1000"      # Polling interval during CREATED (ms)
+export BG_BASELINE_MS="60000"      # Polling interval during normal operation (ms)
+export BG_CONNECT_TIMEOUT_MS="30000"      # Connection timeout during switchover (ms)
+export BG_SWITCHOVER_TIMEOUT_MS="180000"  # Total switchover timeout (ms)
 
 # Run application
 ./run-aurora.sh prod
@@ -75,6 +86,11 @@ export WRAPPER_LOG_LEVEL="FINE"  # Options: SEVERE|WARNING|INFO|FINE|FINER|FINES
 # Or run directly with Maven
 mvn spring-boot:run -Dspring-boot.run.profiles=aurora-prod
 ```
+
+> 📖 **Configuration Details**:
+> - [Plugin Configuration Guide](docs/PLUGIN_CONFIGURATION.md) - Detailed plugin parameters and multi-cluster setup
+> - [Blue/Green Test Guide](docs/BLUEGREEN_TEST_GUIDE.md) - Testing procedures and log analysis
+> - [.env.template](.env.template) - Complete environment variable template with comments
 
 ### 4. Run Tests
 

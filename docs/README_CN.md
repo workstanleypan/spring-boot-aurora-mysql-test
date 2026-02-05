@@ -62,12 +62,23 @@ STACK_NAME=aurora-bg-test-0204-1530 ./deploy.sh outputs
 ### 3. 配置并运行
 
 ```bash
-# 设置环境变量
+# 必需的环境变量
 export AURORA_CLUSTER_ENDPOINT="your-cluster.cluster-xxxxx.us-east-1.rds.amazonaws.com"
 export AURORA_DATABASE="testdb"
 export AURORA_USERNAME="admin"
 export AURORA_PASSWORD="your-password"
-export WRAPPER_LOG_LEVEL="FINE"  # 可选: SEVERE|WARNING|INFO|FINE|FINER|FINEST
+
+# 可选：日志和集群标识
+export WRAPPER_LOG_LEVEL="FINE"    # SEVERE|WARNING|INFO|FINE|FINER|FINEST
+export CLUSTER_ID="cluster-a"      # 多集群场景下每个集群必须唯一
+export BGD_ID="cluster-a"          # 多集群场景下每个集群必须唯一
+
+# 可选：Blue/Green 插件调优（详见 PLUGIN_CONFIGURATION.md）
+export BG_HIGH_MS="100"            # IN_PROGRESS 阶段轮询间隔（毫秒）
+export BG_INCREASED_MS="1000"      # CREATED 阶段轮询间隔（毫秒）
+export BG_BASELINE_MS="60000"      # 正常运行时轮询间隔（毫秒）
+export BG_CONNECT_TIMEOUT_MS="30000"      # 切换期间连接超时（毫秒）
+export BG_SWITCHOVER_TIMEOUT_MS="180000"  # 切换总超时（毫秒）
 
 # 运行应用
 ./run-aurora.sh prod
@@ -75,6 +86,11 @@ export WRAPPER_LOG_LEVEL="FINE"  # 可选: SEVERE|WARNING|INFO|FINE|FINER|FINEST
 # 或者使用 Maven 直接运行
 mvn spring-boot:run -Dspring-boot.run.profiles=aurora-prod
 ```
+
+> 📖 **配置详情**:
+> - [插件配置指南](PLUGIN_CONFIGURATION.md) - 详细的插件参数和多集群配置
+> - [Blue/Green 测试指南](BLUEGREEN_TEST_GUIDE.md) - 测试流程和日志分析
+> - [.env.template](../.env.template) - 完整的环境变量模板（含注释）
 
 ### 4. 运行测试
 
