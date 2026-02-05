@@ -4,7 +4,7 @@ Spring Boot 应用，用于测试 AWS JDBC Wrapper 连接 Aurora MySQL，支持 
 
 ## 功能特性
 
-- AWS Advanced JDBC Wrapper 3.1.0
+- AWS Advanced JDBC Wrapper 3.2.0
 - Blue/Green Deployment Plugin 支持
 - Failover & EFM Plugin
 - HikariCP 连接池
