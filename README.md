@@ -76,14 +76,26 @@ mvn spring-boot:run -Dspring-boot.run.profiles=aurora-prod
 ### 4. Run Tests
 
 ```bash
-# Start continuous write test - 10 connections, write every 100ms
-curl -X POST "http://localhost:8080/api/bluegreen/start-write?numConnections=10&writeIntervalMs=100"
+# Start continuous write test - 10 connections, write every 500ms
+curl -X POST "http://localhost:8080/api/bluegreen/start-write?numConnections=10&writeIntervalMs=500"
 
 # Check status
 curl http://localhost:8080/api/bluegreen/status
 
 # Stop test
 curl -X POST http://localhost:8080/api/bluegreen/stop
+```
+
+### 5. Analyze Switchover Logs
+
+After a Blue/Green switchover, check the wrapper logs:
+
+```bash
+# Check Blue/Green status changes
+grep -i "Status changed to" logs/wrapper.log
+
+# View switchover timeline summary
+grep -i "time offset" logs/wrapper.log -A 14
 ```
 
 ## Build Options
@@ -117,13 +129,13 @@ java -jar target/spring-boot-aurora-mysql-test-1.0.0.jar --spring.profiles.activ
 ### Continuous Write Test Parameters
 
 ```bash
-curl -X POST "http://localhost:8080/api/bluegreen/start-write?numConnections=20&writeIntervalMs=50"
+curl -X POST "http://localhost:8080/api/bluegreen/start-write?numConnections=20&writeIntervalMs=500"
 ```
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `numConnections` | 10 | Number of connections (1-100) |
-| `writeIntervalMs` | 100 | Write interval in milliseconds (0=fastest) |
+| `writeIntervalMs` | 100 | Write interval in milliseconds (0=fastest, recommended: 500) |
 
 ## Configuration
 
