@@ -7,27 +7,35 @@ One-click deployment of Aurora MySQL clusters with Blue/Green deployment test en
 ```bash
 cd cloudformation
 
-# 1. Configure (optional)
-cp config.env config.local.env
-# Edit config.local.env to set parameters
+# One-click deployment (recommended)
+# Deploys cluster + initializes DB + creates Blue/Green deployment
+DB_PASSWORD=YourPassword123 ./deploy.sh deploy-all
 
-# 2. Deploy clusters (~15-20 minutes)
-# Each deploy creates a NEW stack with timestamp (e.g., aurora-bg-test-0204-1530)
-DB_PASSWORD=YourPassword123 ./deploy.sh deploy
+# Or step-by-step:
+DB_PASSWORD=YourPassword123 ./deploy.sh deploy    # Deploy clusters (~15 min)
+./deploy.sh init-db                               # Initialize database
+./deploy.sh create-bluegreen                      # Create Blue/Green (~20-30 min)
 
-# 3. Initialize database (create test users)
-# Automatically uses the last deployed stack
-./deploy.sh init-db
-
-# 4. Create Blue/Green deployment (~20-30 minutes)
-./deploy.sh create-bluegreen
-
-# 5. Check status
-./deploy.sh status
-
-# 6. List all stacks
-./deploy.sh list
+# Other commands
+./deploy.sh status               # Check status
+./deploy.sh outputs              # Get connection info
+./deploy.sh list                 # List all stacks
+./deploy.sh delete               # Delete everything
 ```
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `deploy-all` | One-click: deploy + init-db + create-bluegreen |
+| `deploy` | Deploy Aurora clusters only |
+| `init-db` | Initialize database (create test users) |
+| `create-bluegreen` | Create Blue/Green deployment |
+| `status` | Show cluster and Blue/Green status |
+| `outputs` | Show CloudFormation outputs |
+| `list` | List all aurora-bg-test stacks |
+| `delete` | Delete all resources |
+| `show-config` | Show current configuration |
 
 ## Stack Naming
 

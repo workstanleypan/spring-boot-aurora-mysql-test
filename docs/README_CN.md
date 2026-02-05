@@ -44,19 +44,19 @@ mvn clean package
 ```bash
 cd cloudformation
 
-# 每次部署会创建新的 stack，名称带时间戳（如 aurora-bg-test-0204-1530）
-DB_PASSWORD=YourPassword123 ./deploy.sh deploy
+# 一键部署（推荐）：部署集群 + 初始化数据库 + 创建蓝绿部署
+DB_PASSWORD=YourPassword123 ./deploy.sh deploy-all
 
-# 后续命令自动使用最后部署的 stack
-./deploy.sh init-db              # 初始化数据库
-./deploy.sh create-bluegreen     # 创建蓝绿部署（约 20-30 分钟）
+# 或者分步执行：
+DB_PASSWORD=YourPassword123 ./deploy.sh deploy    # 创建集群（约 15 分钟）
+./deploy.sh init-db                               # 初始化数据库
+./deploy.sh create-bluegreen                      # 创建蓝绿部署（约 20-30 分钟）
+
+# 其他命令
+./deploy.sh status               # 查看状态
 ./deploy.sh outputs              # 获取连接信息
-
-# 列出所有 stacks
-./deploy.sh list
-
-# 使用指定的 stack
-STACK_NAME=aurora-bg-test-0204-1530 ./deploy.sh outputs
+./deploy.sh list                 # 列出所有 stacks
+./deploy.sh delete               # 删除所有资源
 ```
 
 ### 3. 配置并运行

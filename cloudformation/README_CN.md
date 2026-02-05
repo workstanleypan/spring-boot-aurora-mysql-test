@@ -7,27 +7,35 @@
 ```bash
 cd cloudformation
 
-# 1. 配置（可选）
-cp config.env config.local.env
-# 编辑 config.local.env 设置参数
+# 一键部署（推荐）
+# 部署集群 + 初始化数据库 + 创建蓝绿部署
+DB_PASSWORD=YourPassword123 ./deploy.sh deploy-all
 
-# 2. 部署集群 (~15-20 分钟)
-# 每次部署会创建新的 stack，名称带时间戳（如 aurora-bg-test-0204-1530）
-DB_PASSWORD=YourPassword123 ./deploy.sh deploy
+# 或者分步执行：
+DB_PASSWORD=YourPassword123 ./deploy.sh deploy    # 部署集群（约 15 分钟）
+./deploy.sh init-db                               # 初始化数据库
+./deploy.sh create-bluegreen                      # 创建蓝绿部署（约 20-30 分钟）
 
-# 3. 初始化数据库（创建测试用户）
-# 自动使用最后部署的 stack
-./deploy.sh init-db
-
-# 4. 创建蓝绿部署 (~20-30 分钟)
-./deploy.sh create-bluegreen
-
-# 5. 查看状态
-./deploy.sh status
-
-# 6. 列出所有 stacks
-./deploy.sh list
+# 其他命令
+./deploy.sh status               # 查看状态
+./deploy.sh outputs              # 获取连接信息
+./deploy.sh list                 # 列出所有 stacks
+./deploy.sh delete               # 删除所有资源
 ```
+
+## 命令列表
+
+| 命令 | 说明 |
+|------|------|
+| `deploy-all` | 一键部署：deploy + init-db + create-bluegreen |
+| `deploy` | 仅部署 Aurora 集群 |
+| `init-db` | 初始化数据库（创建测试用户） |
+| `create-bluegreen` | 创建蓝绿部署 |
+| `status` | 显示集群和蓝绿部署状态 |
+| `outputs` | 显示 CloudFormation 输出 |
+| `list` | 列出所有 aurora-bg-test stacks |
+| `delete` | 删除所有资源 |
+| `show-config` | 显示当前配置 |
 
 ## Stack 命名
 

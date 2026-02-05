@@ -44,19 +44,19 @@ If you don't have an Aurora cluster, use CloudFormation to create one:
 ```bash
 cd cloudformation
 
-# Deploy creates a NEW stack each time with timestamp (e.g., aurora-bg-test-0204-1530)
-DB_PASSWORD=YourPassword123 ./deploy.sh deploy
+# One-click deployment (recommended): deploy + init-db + create-bluegreen
+DB_PASSWORD=YourPassword123 ./deploy.sh deploy-all
 
-# Subsequent commands auto-use the last deployed stack
-./deploy.sh init-db              # Initialize database
-./deploy.sh create-bluegreen     # Create Blue/Green deployment (~20-30 min)
+# Or step-by-step:
+DB_PASSWORD=YourPassword123 ./deploy.sh deploy    # Create cluster (~15 min)
+./deploy.sh init-db                               # Initialize database
+./deploy.sh create-bluegreen                      # Create Blue/Green (~20-30 min)
+
+# Other commands
+./deploy.sh status               # Show status
 ./deploy.sh outputs              # Get connection info
-
-# List all stacks
-./deploy.sh list
-
-# Use specific stack
-STACK_NAME=aurora-bg-test-0204-1530 ./deploy.sh outputs
+./deploy.sh list                 # List all stacks
+./deploy.sh delete               # Delete everything
 ```
 
 ### 3. Configure and Run

@@ -82,6 +82,7 @@ usage() {
     echo ""
     echo "Commands:"
     echo "  deploy              Deploy Aurora clusters (creates NEW stack by default)"
+    echo "  deploy-all          One-click: deploy + init-db + create-bluegreen"
     echo "  init-db             Initialize database (create test users)"
     echo "  create-bluegreen    Create Blue/Green deployments"
     echo "  status              Show status"
@@ -90,13 +91,19 @@ usage() {
     echo "  delete              Delete everything"
     echo "  show-config         Show current configuration"
     echo ""
-    echo "Workflow:"
+    echo "Quick Start (one command):"
+    echo "  DB_PASSWORD=MyPass ./deploy.sh deploy-all"
+    echo ""
+    echo "Step-by-step Workflow:"
     echo "  1. ./deploy.sh deploy           # Create NEW cluster (with timestamp)"
     echo "  2. ./deploy.sh init-db          # Create test users"
     echo "  3. ./deploy.sh create-bluegreen # Start Blue/Green"
     echo ""
     echo "Examples:"
-    echo "  # Create new cluster (default behavior)"
+    echo "  # One-click deployment (recommended)"
+    echo "  DB_PASSWORD=MyPass ./deploy.sh deploy-all"
+    echo ""
+    echo "  # Create new cluster only"
     echo "  DB_PASSWORD=MyPass ./deploy.sh deploy"
     echo ""
     echo "  # Update existing cluster (set NEW_STACK=false)"
@@ -143,6 +150,71 @@ show_config() {
     local total=$((CLUSTER_COUNT * INSTANCES_PER_CLUSTER))
     echo "Total instances: $total"
     echo ""
+}
+
+#==============================================================================
+# Deploy All (one-click: deploy + init-db + create-bluegreen)
+#==============================================================================
+deploy_all() {
+    load_config
+    
+    echo ""
+    echo "╔══════════════════════════════════════════════════════════════╗"
+    echo "║   One-Click Deployment: Aurora + Init DB + Blue/Green       ║"
+    echo "╚══════════════════════════════════════════════════════════════╝"
+    echo ""
+    
+    if [ -z "$DB_PASSWORD" ]; then
+        echo -e "${RED}Error: DB_PASSWORD is required${NC}"
+        echo "Usage: DB_PASSWORD=YourPassword ./deploy.sh deploy-all"
+        exit 1
+    fi
+    
+    # Step 1: Deploy Aurora clusters
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${CYAN}Step 1/3: Deploying Aurora Clusters${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    deploy_stack
+    
+    # Step 2: Initialize database
+    echo ""
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${CYAN}Step 2/3: Initializing Database${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    init_db
+    
+    # Step 3: Create Blue/Green deployment
+    echo ""
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${CYAN}Step 3/3: Creating Blue/Green Deployment${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    create_bluegreen
+    
+    # Summary
+    echo ""
+    echo "╔══════════════════════════════════════════════════════════════╗"
+    echo "║   ✅ One-Click Deployment Complete!                         ║"
+    echo "╚══════════════════════════════════════════════════════════════╝"
+    echo ""
+    echo -e "${GREEN}Stack Name: $STACK_NAME${NC}"
+    echo ""
+    echo "Next steps:"
+    echo "  1. Wait for Blue/Green deployment to be ready (~20-30 min)"
+    echo "     ./deploy.sh status"
+    echo ""
+    echo "  2. Start your test application:"
+    echo "     export AURORA_CLUSTER_ENDPOINT=<cluster-endpoint>"
+    echo "     export AURORA_PASSWORD='$DB_PASSWORD'"
+    echo "     ./run-aurora.sh prod"
+    echo ""
+    echo "  3. Start continuous write test:"
+    echo "     curl -X POST 'http://localhost:8080/api/bluegreen/start-write?numConnections=10&writeIntervalMs=500'"
+    echo ""
+    echo "  4. Trigger switchover from AWS Console or CLI"
+    echo ""
+    
+    # Show outputs for easy copy
+    show_outputs
 }
 
 #==============================================================================
@@ -693,6 +765,7 @@ resolve_stack_name() {
 #==============================================================================
 case "${1:-}" in
     deploy) deploy_stack ;;
+    deploy-all) deploy_all ;;
     init-db) init_db ;;
     create-bluegreen) create_bluegreen ;;
     status) show_status ;;
