@@ -85,6 +85,7 @@ usage() {
     echo "  deploy-all          One-click: deploy + init-db + create-bluegreen"
     echo "  init-db             Initialize database (create test users)"
     echo "  create-bluegreen    Create Blue/Green deployments"
+    echo "  modify-green        Modify Green cluster instance class (after BG created)"
     echo "  status              Show status"
     echo "  outputs             Show stack outputs"
     echo "  list                List all aurora-bg-test stacks"
@@ -98,6 +99,7 @@ usage() {
     echo "  1. ./deploy.sh deploy           # Create NEW cluster (with timestamp)"
     echo "  2. ./deploy.sh init-db          # Create test users"
     echo "  3. ./deploy.sh create-bluegreen # Start Blue/Green"
+    echo "  4. ./deploy.sh modify-green     # (Optional) Change Green instance class"
     echo ""
     echo "Examples:"
     echo "  # One-click deployment (recommended)"
@@ -118,6 +120,7 @@ usage() {
     echo "  STACK_NAME=xxx         Stack name (auto-generated if NEW_STACK=true)"
     echo "  DB_PASSWORD=xxx        Database password (required)"
     echo "  CLUSTER_COUNT=1-3      Number of clusters"
+    echo "  GREEN_INSTANCE_CLASS   Instance class for Green (used by modify-green)"
 }
 
 show_config() {
@@ -429,7 +432,10 @@ create_bluegreen() {
     echo ""
     echo -e "${CYAN}Stack Name: $STACK_NAME${NC}"
     echo "Target Version:     $TARGET_VERSION"
-    echo "Green Instance:     $GREEN_INSTANCE_CLASS"
+    echo ""
+    echo -e "${YELLOW}Note: Aurora clusters don't support --target-db-instance-class.${NC}"
+    echo -e "${YELLOW}Green cluster will use the same instance class as Blue.${NC}"
+    echo -e "${YELLOW}To change Green instance class, modify after BG deployment is created.${NC}"
     echo ""
 
     ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
@@ -464,13 +470,13 @@ create_bluegreen() {
 
         echo "Creating Blue/Green for $CLUSTER"
         echo "  Version: $CURRENT -> $TARGET_VERSION"
-        echo "  Green Instance Class: $GREEN_INSTANCE_CLASS"
 
+        # Note: Aurora clusters don't support --target-db-instance-class
+        # Green cluster will inherit the same instance class as Blue
         BG_ID=$(aws rds create-blue-green-deployment \
             --blue-green-deployment-name "${STACK_NAME}-bg-$i" \
             --source "arn:aws:rds:${REGION}:${ACCOUNT_ID}:cluster:${CLUSTER}" \
             --target-engine-version "$TARGET_VERSION" \
-            --target-db-instance-class "$GREEN_INSTANCE_CLASS" \
             --query 'BlueGreenDeployment.BlueGreenDeploymentIdentifier' \
             --output text \
             --region "$REGION" 2>&1) || {
@@ -488,12 +494,83 @@ create_bluegreen() {
     else
         echo -e "${GREEN}✅ Created $success_count Blue/Green deployment(s)${NC}"
         echo ""
-        echo "Green cluster will use: $GREEN_INSTANCE_CLASS"
-        echo "  (Larger instance = faster binlog catchup = faster switchover)"
+        echo "To change Green cluster instance class after creation:"
+        echo "  aws rds modify-db-instance --db-instance-identifier <green-instance> \\"
+        echo "      --db-instance-class $GREEN_INSTANCE_CLASS --apply-immediately"
     fi
     [ $skip_count -gt 0 ] && echo -e "${YELLOW}Skipped $skip_count cluster(s) (not available)${NC}"
     echo ""
     echo -e "${YELLOW}Blue/Green deployments take 10-30 minutes.${NC}"
+}
+
+#==============================================================================
+# Modify Green cluster instance class
+#==============================================================================
+modify_green_instances() {
+    load_config
+    resolve_stack_name
+    
+    echo ""
+    echo "╔══════════════════════════════════════════════════════════════╗"
+    echo "║   Modifying Green Cluster Instance Class                    ║"
+    echo "╚══════════════════════════════════════════════════════════════╝"
+    echo ""
+    echo -e "${CYAN}Stack Name: $STACK_NAME${NC}"
+    echo "Target Instance Class: $GREEN_INSTANCE_CLASS"
+    echo ""
+    
+    # Find all Green instances (they have "-green-" in their identifier)
+    GREEN_INSTANCES=$(aws rds describe-db-instances \
+        --query "DBInstances[?contains(DBInstanceIdentifier, \`${STACK_NAME}\`) && contains(DBInstanceIdentifier, \`-green-\`)].DBInstanceIdentifier" \
+        --output text \
+        --region "$REGION" 2>/dev/null || echo "")
+    
+    if [ -z "$GREEN_INSTANCES" ] || [ "$GREEN_INSTANCES" = "None" ]; then
+        echo -e "${YELLOW}No Green instances found. Make sure Blue/Green deployment is created first.${NC}"
+        echo ""
+        echo "Run: ./deploy.sh create-bluegreen"
+        return 1
+    fi
+    
+    local success_count=0
+    local skip_count=0
+    
+    for INSTANCE in $GREEN_INSTANCES; do
+        CURRENT_CLASS=$(aws rds describe-db-instances \
+            --db-instance-identifier "$INSTANCE" \
+            --query 'DBInstances[0].DBInstanceClass' \
+            --output text \
+            --region "$REGION" 2>/dev/null)
+        
+        if [ "$CURRENT_CLASS" = "$GREEN_INSTANCE_CLASS" ]; then
+            echo -e "${YELLOW}Skipping $INSTANCE (already $GREEN_INSTANCE_CLASS)${NC}"
+            skip_count=$((skip_count + 1))
+            continue
+        fi
+        
+        echo "Modifying $INSTANCE"
+        echo "  $CURRENT_CLASS -> $GREEN_INSTANCE_CLASS"
+        
+        aws rds modify-db-instance \
+            --db-instance-identifier "$INSTANCE" \
+            --db-instance-class "$GREEN_INSTANCE_CLASS" \
+            --apply-immediately \
+            --region "$REGION" > /dev/null 2>&1 && {
+            echo -e "${GREEN}  ✅ Modification initiated${NC}"
+            success_count=$((success_count + 1))
+        } || {
+            echo -e "${RED}  ❌ Failed${NC}"
+        }
+    done
+    
+    echo ""
+    if [ $success_count -gt 0 ]; then
+        echo -e "${GREEN}✅ Initiated modification for $success_count instance(s)${NC}"
+        echo ""
+        echo -e "${YELLOW}Instance modification takes 5-15 minutes.${NC}"
+        echo "Check status: ./deploy.sh status"
+    fi
+    [ $skip_count -gt 0 ] && echo "Skipped $skip_count instance(s) (already target class)"
 }
 
 #==============================================================================
@@ -768,6 +845,7 @@ case "${1:-}" in
     deploy-all) deploy_all ;;
     init-db) init_db ;;
     create-bluegreen) create_bluegreen ;;
+    modify-green) modify_green_instances ;;
     status) show_status ;;
     outputs) show_outputs ;;
     list) list_stacks ;;
