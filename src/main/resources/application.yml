@@ -24,8 +24,9 @@ spring:
       connection-timeout: 10000
       validation-timeout: 5000
       connection-test-query: SELECT 1
-      # 连接泄漏检测 - 如果连接超过60秒未归还则记录警告
-      leak-detection-threshold: 60000
+      # 连接泄漏检测 - 禁用 (0)，因为持久连接测试会长时间持有连接
+      # 如需启用，设置为毫秒值如 60000 (60秒)
+      leak-detection-threshold: 0
 
 # 日志配置 (Log4j2 配置在 log4j2-spring.xml)
 logging:
