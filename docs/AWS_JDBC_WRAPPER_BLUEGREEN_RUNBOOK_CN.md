@@ -54,7 +54,7 @@ AWS Advanced JDBC Wrapper 的 `bg` 插件在 Blue/Green 切换期间主动管理
 ### 软件要求
 
 - Java 17+
-- AWS Advanced JDBC Wrapper 3.2.0+
+- AWS Advanced JDBC Wrapper 3.2.0+（推荐使用[最新版本](https://github.com/aws/aws-advanced-jdbc-wrapper/releases)）
 - Spring Boot 3.x（推荐）或兼容框架
 - MySQL 客户端（用于数据库初始化）
 - AWS CLI（用于 CloudFormation 部署）
@@ -177,6 +177,8 @@ jdbc:aws-wrapper:mysql://<cluster-endpoint>:3306/<database>?
 ```
 
 ### Blue/Green 插件参数
+
+> 💡 **建议**：默认值适用于大多数场景。只有在有特定需求或测试中遇到问题时才需要调整这些参数。
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|

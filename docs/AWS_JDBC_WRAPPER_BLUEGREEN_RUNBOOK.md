@@ -54,7 +54,7 @@ The AWS Advanced JDBC Wrapper's `bg` plugin actively manages database connection
 ### Software Requirements
 
 - Java 17+
-- AWS Advanced JDBC Wrapper 3.2.0+
+- AWS Advanced JDBC Wrapper 3.2.0+ (recommend using the [latest release](https://github.com/aws/aws-advanced-jdbc-wrapper/releases))
 - Spring Boot 3.x (recommended) or compatible framework
 - MySQL client (for database initialization)
 - AWS CLI (for CloudFormation deployment)
@@ -177,6 +177,8 @@ jdbc:aws-wrapper:mysql://<cluster-endpoint>:3306/<database>?
 ```
 
 ### Blue/Green Plugin Parameters
+
+> 💡 **Recommendation**: The default values work well for most scenarios. Only adjust these parameters if you have specific requirements or encounter issues during testing.
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|

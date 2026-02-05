@@ -6,6 +6,10 @@ Spring Boot application for testing AWS JDBC Wrapper with Aurora MySQL, supporti
 > - [AWS JDBC Wrapper Blue/Green Runbook (English)](docs/AWS_JDBC_WRAPPER_BLUEGREEN_RUNBOOK.md)
 > - [AWS JDBC Wrapper Blue/Green Runbook (中文)](docs/AWS_JDBC_WRAPPER_BLUEGREEN_RUNBOOK_CN.md)
 
+> 🔗 **AWS Advanced JDBC Wrapper**: We recommend using the latest version for testing. Download from:
+> - [GitHub Releases](https://github.com/aws/aws-advanced-jdbc-wrapper/releases)
+> - [Maven Central](https://central.sonatype.com/artifact/software.amazon.jdbc/aws-advanced-jdbc-wrapper)
+
 ## Features
 
 - AWS Advanced JDBC Wrapper 3.2.0
