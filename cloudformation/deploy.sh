@@ -272,22 +272,6 @@ init_db() {
     echo ""
     echo -e "${CYAN}Stack Name: $STACK_NAME${NC}"
     echo ""
-
-    # Get cluster endpoint
-    ENDPOINT=$(aws cloudformation describe-stacks \
-        --stack-name "$STACK_NAME" \
-        --query "Stacks[0].Outputs[?OutputKey=='Cluster1Endpoint'].OutputValue" \
-        --output text \
-        --region "$REGION" 2>/dev/null)
-
-    if [ -z "$ENDPOINT" ] || [ "$ENDPOINT" = "None" ]; then
-        echo -e "${RED}Error: Cannot find cluster endpoint. Is the stack deployed?${NC}"
-        exit 1
-    fi
-
-    echo "Cluster Endpoint: $ENDPOINT"
-    echo "Database: $DB_NAME"
-    echo ""
     
     if [ -z "$DB_PASSWORD" ]; then
         echo -e "${RED}Error: DB_PASSWORD is required${NC}"
@@ -296,26 +280,55 @@ init_db() {
 
     SQL_FILE="$SCRIPT_DIR/init-database.sql"
     
-    echo "Creating test users and tables..."
-    echo ""
+    # Initialize all clusters in the stack
+    local success_count=0
+    local fail_count=0
     
-    mysql -h "$ENDPOINT" -u "$DB_USERNAME" -p"$DB_PASSWORD" < "$SQL_FILE"
+    for i in $(seq 1 3); do
+        ENDPOINT=$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" \
+            --query "Stacks[0].Outputs[?OutputKey=='Cluster${i}Endpoint'].OutputValue" \
+            --output text \
+            --region "$REGION" 2>/dev/null)
+
+        if [ -z "$ENDPOINT" ] || [ "$ENDPOINT" = "None" ]; then
+            continue
+        fi
+
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "Cluster $i: $ENDPOINT"
+        echo "Database: $DB_NAME"
+        echo ""
+        
+        echo "Creating test users and tables..."
+        
+        if mysql -h "$ENDPOINT" -u "$DB_USERNAME" -p"$DB_PASSWORD" < "$SQL_FILE" 2>/dev/null; then
+            echo -e "${GREEN}  ✅ Cluster $i initialized!${NC}"
+            ((success_count++))
+        else
+            echo -e "${RED}  ❌ Cluster $i failed${NC}"
+            ((fail_count++))
+        fi
+        echo ""
+    done
     
-    if [ $? -eq 0 ]; then
-        echo ""
-        echo -e "${GREEN}✅ Database initialized!${NC}"
-        echo ""
-        echo "Test users created:"
-        echo "  - testuser1 / testuser"
-        echo "  - testuser2 / testuser"
-        echo "  - testuser3 / testuser"
-        echo ""
-        echo "Permissions: SELECT on mysql.*, ALL on testdb.*"
-    else
-        echo -e "${RED}Failed to initialize database${NC}"
-        echo "Make sure you can connect to the cluster from this machine."
+    if [ $success_count -eq 0 ]; then
+        echo -e "${RED}Error: No clusters were initialized. Is the stack deployed?${NC}"
         exit 1
     fi
+    
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo -e "${GREEN}✅ Database initialization complete!${NC}"
+    echo "   Success: $success_count cluster(s)"
+    [ $fail_count -gt 0 ] && echo -e "   ${YELLOW}Failed: $fail_count cluster(s)${NC}"
+    echo ""
+    echo "Test users created:"
+    echo "  - testuser1 / testuser"
+    echo "  - testuser2 / testuser"
+    echo "  - testuser3 / testuser"
+    echo ""
+    echo "Permissions: SELECT on mysql.*, ALL on testdb.*"
 }
 
 #==============================================================================
