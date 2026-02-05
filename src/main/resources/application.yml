@@ -17,13 +17,15 @@ spring:
     # HikariCP 连接池配置
     hikari:
       pool-name: AuroraHikariPool
-      minimum-idle: 10
-      maximum-pool-size: 50
+      minimum-idle: 20
+      maximum-pool-size: 120
       idle-timeout: 300000
       max-lifetime: 600000
-      connection-timeout: 30000
+      connection-timeout: 10000
       validation-timeout: 5000
       connection-test-query: SELECT 1
+      # 连接泄漏检测 - 如果连接超过60秒未归还则记录警告
+      leak-detection-threshold: 60000
 
 # 日志配置 (Log4j2 配置在 log4j2-spring.xml)
 logging:
