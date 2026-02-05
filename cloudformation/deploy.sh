@@ -494,25 +494,128 @@ delete_all() {
     resolve_stack_name
     
     echo -e "${YELLOW}⚠️  Delete all resources for: $STACK_NAME${NC}"
+    echo "This will delete:"
+    echo "  - Blue/Green deployments"
+    echo "  - All clusters matching ${STACK_NAME}-* (including -old1 suffixes)"
+    echo "  - CloudFormation stack"
+    echo ""
     read -p "Are you sure? (yes/no): " confirm
     [ "$confirm" != "yes" ] && exit 0
 
-    echo "Deleting Blue/Green deployments..."
+    # Step 1: Delete Blue/Green deployments
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Step 1: Deleting Blue/Green deployments..."
     BG_IDS=$(aws rds describe-blue-green-deployments \
         --query "BlueGreenDeployments[?contains(BlueGreenDeploymentName, \`$STACK_NAME\`)].BlueGreenDeploymentIdentifier" \
         --output text \
         --region "$REGION" 2>/dev/null || echo "")
     
-    for BG_ID in $BG_IDS; do
-        [ -n "$BG_ID" ] && aws rds delete-blue-green-deployment \
-            --blue-green-deployment-identifier "$BG_ID" \
-            --delete-target \
-            --region "$REGION" 2>/dev/null || true
-    done
+    if [ -n "$BG_IDS" ] && [ "$BG_IDS" != "None" ]; then
+        for BG_ID in $BG_IDS; do
+            echo "  Deleting: $BG_ID"
+            aws rds delete-blue-green-deployment \
+                --blue-green-deployment-identifier "$BG_ID" \
+                --delete-target \
+                --region "$REGION" 2>/dev/null || true
+        done
+        echo "  Waiting for Blue/Green deletions..."
+        sleep 10
+    else
+        echo "  No Blue/Green deployments found"
+    fi
 
-    echo "Deleting CloudFormation stack..."
-    aws cloudformation delete-stack --stack-name "$STACK_NAME" --region "$REGION"
-    aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" --region "$REGION" || true
+    # Step 2: Find and delete all related DB instances
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Step 2: Deleting DB instances..."
+    
+    INSTANCES=$(aws rds describe-db-instances \
+        --query "DBInstances[?contains(DBClusterIdentifier, \`$STACK_NAME\`)].DBInstanceIdentifier" \
+        --output text \
+        --region "$REGION" 2>/dev/null || echo "")
+    
+    if [ -n "$INSTANCES" ] && [ "$INSTANCES" != "None" ]; then
+        for INSTANCE in $INSTANCES; do
+            echo "  Deleting instance: $INSTANCE"
+            aws rds delete-db-instance \
+                --db-instance-identifier "$INSTANCE" \
+                --skip-final-snapshot \
+                --region "$REGION" 2>/dev/null &
+        done
+        wait
+        
+        echo "  Waiting for instances to be deleted (this may take 5-10 minutes)..."
+        for INSTANCE in $INSTANCES; do
+            echo "    Waiting for: $INSTANCE"
+            aws rds wait db-instance-deleted \
+                --db-instance-identifier "$INSTANCE" \
+                --region "$REGION" 2>/dev/null || true
+        done
+    else
+        echo "  No DB instances found"
+    fi
+
+    # Step 3: Find and delete all related DB clusters
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Step 3: Deleting DB clusters..."
+    
+    CLUSTERS=$(aws rds describe-db-clusters \
+        --query "DBClusters[?contains(DBClusterIdentifier, \`$STACK_NAME\`)].DBClusterIdentifier" \
+        --output text \
+        --region "$REGION" 2>/dev/null || echo "")
+    
+    if [ -n "$CLUSTERS" ] && [ "$CLUSTERS" != "None" ]; then
+        for CLUSTER in $CLUSTERS; do
+            echo "  Disabling deletion protection: $CLUSTER"
+            aws rds modify-db-cluster \
+                --db-cluster-identifier "$CLUSTER" \
+                --no-deletion-protection \
+                --apply-immediately \
+                --region "$REGION" 2>/dev/null || true
+        done
+        
+        sleep 5
+        
+        for CLUSTER in $CLUSTERS; do
+            echo "  Deleting cluster: $CLUSTER"
+            aws rds delete-db-cluster \
+                --db-cluster-identifier "$CLUSTER" \
+                --skip-final-snapshot \
+                --region "$REGION" 2>/dev/null || true
+        done
+        
+        echo "  Waiting for clusters to be deleted..."
+        for CLUSTER in $CLUSTERS; do
+            echo "    Waiting for: $CLUSTER"
+            aws rds wait db-cluster-deleted \
+                --db-cluster-identifier "$CLUSTER" \
+                --region "$REGION" 2>/dev/null || true
+        done
+    else
+        echo "  No DB clusters found"
+    fi
+
+    # Step 4: Delete CloudFormation stack
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Step 4: Deleting CloudFormation stack..."
+    
+    STACK_STATUS=$(aws cloudformation describe-stacks \
+        --stack-name "$STACK_NAME" \
+        --query 'Stacks[0].StackStatus' \
+        --output text \
+        --region "$REGION" 2>/dev/null || echo "NOT_FOUND")
+    
+    if [ "$STACK_STATUS" != "NOT_FOUND" ]; then
+        aws cloudformation delete-stack --stack-name "$STACK_NAME" --region "$REGION"
+        echo "  Waiting for stack deletion..."
+        aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" --region "$REGION" 2>/dev/null || true
+        echo "  Stack deleted"
+    else
+        echo "  Stack not found (already deleted or never existed)"
+    fi
 
     # Clear last stack name if it matches
     if [ -f "$SCRIPT_DIR/.last-stack-name" ]; then
@@ -522,7 +625,9 @@ delete_all() {
         fi
     fi
 
-    echo -e "${GREEN}✅ Deleted!${NC}"
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo -e "${GREEN}✅ All resources deleted for: $STACK_NAME${NC}"
 }
 
 #==============================================================================
