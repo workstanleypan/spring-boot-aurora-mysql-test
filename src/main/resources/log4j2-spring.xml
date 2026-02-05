@@ -2,7 +2,7 @@
 <Configuration status="WARN" monitorInterval="30">
     <Properties>
         <Property name="LOG_PATH">logs</Property>
-        <!-- 启动时间戳，每次启动生成新文件 -->
+        <!-- Startup timestamp, generates new file on each startup -->
         <Property name="STARTUP_TIME">$${date:yyyyMMdd-HHmmss}</Property>
         <Property name="LOG_PATTERN">%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n</Property>
         <Property name="LOG_PATTERN_CONSOLE">%d{HH:mm:ss.SSS} [%t] %highlight{%-5level} %style{%logger{36}}{cyan} - %msg%n</Property>
@@ -14,17 +14,17 @@
             <PatternLayout pattern="${LOG_PATTERN_CONSOLE}" disableAnsi="false"/>
         </Console>
 
-        <!-- File - All logs (每次启动新文件) -->
+        <!-- File - All logs (new file per startup) -->
         <File name="AppFile" fileName="${LOG_PATH}/spring-boot-${STARTUP_TIME}.log" append="false">
             <PatternLayout pattern="${LOG_PATTERN}"/>
         </File>
 
-        <!-- File - AWS JDBC Wrapper logs (每次启动新文件) -->
+        <!-- File - AWS JDBC Wrapper logs (new file per startup) -->
         <File name="WrapperFile" fileName="${LOG_PATH}/wrapper-${STARTUP_TIME}.log" append="false">
             <PatternLayout pattern="${LOG_PATTERN}"/>
         </File>
 
-        <!-- File - Error logs (每次启动新文件) -->
+        <!-- File - Error logs (new file per startup) -->
         <File name="ErrorFile" fileName="${LOG_PATH}/error-${STARTUP_TIME}.log" append="false">
             <PatternLayout pattern="${LOG_PATTERN}"/>
             <ThresholdFilter level="ERROR" onMatch="ACCEPT" onMismatch="DENY"/>
@@ -32,9 +32,9 @@
     </Appenders>
 
     <Loggers>
-        <!-- AWS JDBC Wrapper - 详细日志 -->
+        <!-- AWS JDBC Wrapper - verbose logging -->
         <!-- JUL FINEST = TRACE, FINE = DEBUG, INFO = INFO -->
-        <!-- 生产环境推荐 DEBUG (FINE)，测试环境推荐 TRACE (FINEST) -->
+        <!-- Production: recommend DEBUG (FINE), Testing: recommend TRACE (FINEST) -->
         <Logger name="software.amazon.jdbc" level="TRACE" additivity="false">
             <AppenderRef ref="Console"/>
             <AppenderRef ref="WrapperFile"/>

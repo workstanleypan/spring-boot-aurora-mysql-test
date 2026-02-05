@@ -2,19 +2,19 @@ spring:
   application:
     name: spring-boot-aurora-mysql-test
   
-  # 默认数据源配置 - Aurora MySQL with HikariCP
-  # clusterId 和 bgdId 说明：
-  # - clusterId: 集群拓扑缓存标识符，相同 clusterId 的连接共享拓扑缓存
-  # - bgdId: Blue/Green 部署状态标识符，用于区分不同的 BG 部署
-  # - 单集群场景：两者可以使用相同值或默认值
-  # - 多集群场景：每个集群必须使用不同的 clusterId 和 bgdId，否则会导致缓存/状态混乱
+  # Default datasource configuration - Aurora MySQL with HikariCP
+  # clusterId and bgdId explanation:
+  # - clusterId: Cluster topology cache identifier, connections with same clusterId share topology cache
+  # - bgdId: Blue/Green deployment state identifier, used to distinguish different BG deployments
+  # - Single cluster: Both can use the same value or defaults
+  # - Multi-cluster: Each cluster must use different clusterId and bgdId to avoid cache/state conflicts
   datasource:
     url: jdbc:aws-wrapper:mysql://${AURORA_CLUSTER_ENDPOINT}:3306/${AURORA_DATABASE:testdb}?wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&wrapperLoggerLevel=${WRAPPER_LOG_LEVEL:INFO}&clusterId=${CLUSTER_ID:cluster-a}&bgdId=${BGD_ID:cluster-a}&bgHighMs=${BG_HIGH_MS:100}&bgIncreasedMs=${BG_INCREASED_MS:1000}&bgBaselineMs=${BG_BASELINE_MS:60000}&bgConnectTimeoutMs=${BG_CONNECT_TIMEOUT_MS:30000}&bgSwitchoverTimeoutMs=${BG_SWITCHOVER_TIMEOUT_MS:180000}
     username: ${AURORA_USERNAME:admin}
     password: ${AURORA_PASSWORD}
     driver-class-name: software.amazon.jdbc.Driver
     
-    # HikariCP 连接池配置
+    # HikariCP connection pool configuration
     hikari:
       pool-name: AuroraHikariPool
       minimum-idle: 20
@@ -24,15 +24,15 @@ spring:
       connection-timeout: 10000
       validation-timeout: 5000
       connection-test-query: SELECT 1
-      # 连接泄漏检测 - 禁用 (0)，因为持久连接测试会长时间持有连接
-      # 如需启用，设置为毫秒值如 60000 (60秒)
+      # Connection leak detection - disabled (0) because persistent connection tests hold connections for long time
+      # To enable, set to milliseconds value like 60000 (60 seconds)
       leak-detection-threshold: 0
 
-# 日志配置 (Log4j2 配置在 log4j2-spring.xml)
+# Logging configuration (Log4j2 config in log4j2-spring.xml)
 logging:
   config: classpath:log4j2-spring.xml
 
-# Actuator 配置
+# Actuator configuration
 management:
   endpoints:
     web:
@@ -42,12 +42,12 @@ management:
     health:
       show-details: always
 
-# 服务器配置
+# Server configuration
 server:
   port: 8080
 
 ---
-# Aurora MySQL 生产环境
+# Aurora MySQL production environment
 spring:
   config:
     activate:
@@ -56,7 +56,7 @@ spring:
     url: jdbc:aws-wrapper:mysql://${AURORA_CLUSTER_ENDPOINT}:3306/${AURORA_DATABASE:testdb}?wrapperLoggerLevel=${WRAPPER_LOG_LEVEL:INFO}&wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg&clusterId=${CLUSTER_ID:cluster-a}&bgdId=${BGD_ID:cluster-a}&bgHighMs=${BG_HIGH_MS:100}&bgIncreasedMs=${BG_INCREASED_MS:1000}&bgBaselineMs=${BG_BASELINE_MS:60000}&bgConnectTimeoutMs=${BG_CONNECT_TIMEOUT_MS:30000}&bgSwitchoverTimeoutMs=${BG_SWITCHOVER_TIMEOUT_MS:180000}${JDBC_PARAMS:}
 
 ---
-# Aurora MySQL 开发环境（详细日志）
+# Aurora MySQL development environment (verbose logging)
 spring:
   config:
     activate:
@@ -68,7 +68,7 @@ spring:
       maximum-pool-size: 20
 
 ---
-# RDS MySQL 生产环境
+# RDS MySQL production environment
 spring:
   config:
     activate:
@@ -79,7 +79,7 @@ spring:
     password: ${RDS_PASSWORD}
 
 ---
-# RDS MySQL 开发环境
+# RDS MySQL development environment
 spring:
   config:
     activate:
