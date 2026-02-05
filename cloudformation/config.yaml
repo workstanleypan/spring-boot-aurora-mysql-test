@@ -1,0 +1,45 @@
+# Aurora Blue/Green Test Environment Configuration
+# 复制此文件为 config.local.yaml 并修改配置
+
+# 基础配置
+stack_name: aurora-bg-test
+region: us-east-1
+
+# VPC 配置
+vpc:
+  use_existing: true          # true: 使用现有 VPC, false: 创建新 VPC
+  vpc_id: ""                  # 留空则自动使用默认 VPC
+  subnet_ids: []              # 留空则自动检测子网
+
+# 数据库配置
+database:
+  username: admin
+  password: "Password1"                # 必填！或通过环境变量 DB_PASSWORD 设置
+  name: testdb
+  instance_class: db.t3.medium
+
+# 集群配置
+clusters:
+  # 集群 1 (必须)
+  - name: cluster-1
+    enabled: true
+    engine_version: "8.0.mysql_aurora.3.04.2"
+    instances: 2              # 实例数量 1-3
+    create_bluegreen: true
+    target_version: "8.0.mysql_aurora.3.10.3"
+
+  # 集群 2 (可选)
+  - name: cluster-2
+    enabled: false
+    engine_version: "8.0.mysql_aurora.3.08.0"
+    instances: 2
+    create_bluegreen: true
+    target_version: "8.0.mysql_aurora.3.10.3"
+
+  # 集群 3 (可选)
+  - name: cluster-3
+    enabled: false
+    engine_version: "8.0.mysql_aurora.3.09.0"
+    instances: 1
+    create_bluegreen: false
+    target_version: ""
