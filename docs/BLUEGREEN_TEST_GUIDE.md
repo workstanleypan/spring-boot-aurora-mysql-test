@@ -20,8 +20,8 @@ WRAPPER_LOG_LEVEL="FINE" \
 ### 2. Start Test
 
 ```bash
-# Continuous write test - 10 connections, write every 100ms
-curl -X POST "http://localhost:8080/api/bluegreen/start-write?numConnections=10&writeIntervalMs=100"
+# Continuous write test - 10 connections, write every 500ms
+curl -X POST "http://localhost:8080/api/bluegreen/start-write?numConnections=10&writeIntervalMs=500"
 
 # Check status
 curl http://localhost:8080/api/bluegreen/status
@@ -59,7 +59,7 @@ curl -X POST "http://localhost:8080/api/bluegreen/start-write?numConnections=20&
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `numConnections` | 10 | Number of connections (1-100) |
-| `writeIntervalMs` | 100 | Write interval in milliseconds (0=fastest) |
+| `writeIntervalMs` | 500 | Write interval in milliseconds (0=fastest) |
 
 ### Read/Write Mixed Test Parameters
 

@@ -76,8 +76,8 @@ mvn spring-boot:run -Dspring-boot.run.profiles=aurora-prod
 ### 4. 运行测试
 
 ```bash
-# 启动持续写入测试 - 10个连接，每100ms写入一次
-curl -X POST "http://localhost:8080/api/bluegreen/start-write?numConnections=10&writeIntervalMs=100"
+# 启动持续写入测试 - 10个连接，每500ms写入一次
+curl -X POST "http://localhost:8080/api/bluegreen/start-write?numConnections=10&writeIntervalMs=500"
 
 # 查看状态
 curl http://localhost:8080/api/bluegreen/status
@@ -123,7 +123,7 @@ curl -X POST "http://localhost:8080/api/bluegreen/start-write?numConnections=20&
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
 | `numConnections` | 10 | 连接数量 (1-100) |
-| `writeIntervalMs` | 100 | 写入间隔毫秒 (0=最快) |
+| `writeIntervalMs` | 500 | 写入间隔毫秒 (0=最快) |
 
 ## 配置说明
 

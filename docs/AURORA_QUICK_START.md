@@ -22,7 +22,7 @@ curl http://localhost:8080/api/test
 
 ```bash
 # Continuous write test
-curl -X POST "http://localhost:8080/api/bluegreen/start-write?numConnections=10&writeIntervalMs=100"
+curl -X POST "http://localhost:8080/api/bluegreen/start-write?numConnections=10&writeIntervalMs=500"
 
 # Check status
 curl http://localhost:8080/api/bluegreen/status
