@@ -154,7 +154,8 @@ curl -X POST "http://localhost:8080/api/bluegreen/start-write?numConnections=20&
 | `AURORA_USERNAME` | Yes | - | Database username |
 | `AURORA_PASSWORD` | Yes | - | Database password |
 | `WRAPPER_LOG_LEVEL` | No | INFO | Log level (SEVERE\|WARNING\|INFO\|FINE\|FINER\|FINEST) |
-| `BGD_ID` | No | cluster-a | Blue/Green deployment identifier |
+| `CLUSTER_ID` | No | cluster-a | Cluster topology cache identifier (must be unique per cluster) |
+| `BGD_ID` | No | cluster-a | Blue/Green deployment identifier (must be unique per cluster) |
 
 ### Blue/Green Plugin Parameters
 
@@ -192,6 +193,49 @@ jdbc:aws-wrapper:mysql://<cluster-endpoint>:3306/<database>?characterEncoding=ut
 | `failover2` | Automatic failover |
 | `efm2` | Enhanced failure monitoring |
 | `bg` | Blue/Green deployment support |
+
+### Cluster Identifier Configuration (clusterId & bgdId)
+
+| Parameter | Default | Purpose | Storage Content |
+|-----------|---------|---------|-----------------|
+| `clusterId` | `"1"` | Cluster topology cache identifier | Cluster node topology |
+| `bgdId` | `"1"` | Blue/Green deployment status identifier | BG switchover status |
+
+#### Single Cluster Scenario
+
+For single cluster connections, you can use default values or set both to the same value:
+
+```
+clusterId=cluster-a&bgdId=cluster-a
+```
+
+#### Multi-Cluster Scenario (Important!)
+
+When a single application connects to multiple Aurora clusters, **both `clusterId` and `bgdId` must be set to different values for each cluster**:
+
+```yaml
+# Cluster A DataSource
+datasource-a:
+  url: jdbc:aws-wrapper:mysql://cluster-a.xxx.rds.amazonaws.com:3306/db?
+       wrapperPlugins=...bg&
+       clusterId=cluster-a&
+       bgdId=cluster-a
+
+# Cluster B DataSource
+datasource-b:
+  url: jdbc:aws-wrapper:mysql://cluster-b.xxx.rds.amazonaws.com:3306/db?
+       wrapperPlugins=...bg&
+       clusterId=cluster-b&
+       bgdId=cluster-b
+```
+
+#### What Happens If Not Configured Correctly?
+
+| Scenario | Problem |
+|----------|---------|
+| Only `clusterId` different | BG status will be confused, Cluster A's switchover may affect Cluster B's connection routing |
+| Only `bgdId` different | Topology cache will be confused, may treat Cluster A's nodes as Cluster B's nodes |
+| Both same for different clusters | Both problems above will occur |
 
 ### Blue/Green Plugin Behavior
 

@@ -167,6 +167,49 @@ jdbc:aws-wrapper:mysql://<cluster-endpoint>:3306/<database>?characterEncoding=ut
 | `efm2` | 增强故障监控 |
 | `bg` | Blue/Green 部署支持 |
 
+### 集群标识配置（clusterId 和 bgdId）
+
+| 参数 | 默认值 | 作用 | 存储内容 |
+|------|--------|------|----------|
+| `clusterId` | `"1"` | 集群拓扑缓存标识符 | 集群节点拓扑信息 |
+| `bgdId` | `"1"` | Blue/Green 部署状态标识符 | BG 切换状态 |
+
+#### 单集群场景
+
+单集群连接时，可以使用默认值或设置为相同值：
+
+```
+clusterId=cluster-a&bgdId=cluster-a
+```
+
+#### 多集群场景（重要！）
+
+当单个应用连接多个 Aurora 集群时，**每个集群的 `clusterId` 和 `bgdId` 必须设置为不同的值**：
+
+```yaml
+# 集群 A 数据源
+datasource-a:
+  url: jdbc:aws-wrapper:mysql://cluster-a.xxx.rds.amazonaws.com:3306/db?
+       wrapperPlugins=...bg&
+       clusterId=cluster-a&
+       bgdId=cluster-a
+
+# 集群 B 数据源
+datasource-b:
+  url: jdbc:aws-wrapper:mysql://cluster-b.xxx.rds.amazonaws.com:3306/db?
+       wrapperPlugins=...bg&
+       clusterId=cluster-b&
+       bgdId=cluster-b
+```
+
+#### 配置错误的后果
+
+| 场景 | 问题 |
+|------|------|
+| 只设置 `clusterId` 不同 | BG 状态会混乱，集群 A 的切换可能影响集群 B 的连接路由 |
+| 只设置 `bgdId` 不同 | 拓扑缓存会混乱，可能把集群 A 的节点当作集群 B 的节点 |
+| 两者都相同 | 以上两个问题都会发生 |
+
 ## 项目结构
 
 ```

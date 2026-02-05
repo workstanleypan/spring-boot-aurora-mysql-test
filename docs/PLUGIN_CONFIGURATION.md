@@ -28,6 +28,59 @@ wrapperPlugins=auroraConnectionTracker,failover2,efm2,bg
 
 RDS is single instance or primary-standby mode, no need to select from multiple read replicas. Aurora has multiple read replicas and needs smart node selection.
 
+## Cluster Identifier Configuration (clusterId & bgdId)
+
+### Parameter Description
+
+| Parameter | Default | Purpose | Storage Content |
+|-----------|---------|---------|-----------------|
+| `clusterId` | `"1"` | Cluster topology cache identifier | Cluster node topology (Topology) |
+| `bgdId` | `"1"` | Blue/Green deployment status identifier | BG switchover status (BlueGreenStatus) |
+
+### Single Cluster Scenario
+
+For single cluster connections, you can use default values or set both to the same value:
+
+```
+clusterId=cluster-a&bgdId=cluster-a
+```
+
+### Multi-Cluster Scenario (Important!)
+
+When a single application connects to multiple Aurora clusters, **both `clusterId` and `bgdId` must be set to different values for each cluster**:
+
+```yaml
+# Cluster A DataSource
+datasource-a:
+  url: jdbc:aws-wrapper:mysql://cluster-a.xxx.rds.amazonaws.com:3306/db?
+       wrapperPlugins=...bg&
+       clusterId=cluster-a&
+       bgdId=cluster-a
+
+# Cluster B DataSource
+datasource-b:
+  url: jdbc:aws-wrapper:mysql://cluster-b.xxx.rds.amazonaws.com:3306/db?
+       wrapperPlugins=...bg&
+       clusterId=cluster-b&
+       bgdId=cluster-b
+```
+
+### What Happens If Not Configured Correctly?
+
+| Scenario | Problem |
+|----------|---------|
+| Only `clusterId` different | BG status will be confused, Cluster A's switchover may affect Cluster B's connection routing |
+| Only `bgdId` different | Topology cache will be confused, may treat Cluster A's nodes as Cluster B's nodes |
+| Both same for different clusters | Both problems above will occur |
+
+### How It Works Internally
+
+1. **clusterId**: Used by `RdsHostListProvider` to cache cluster topology. Connections with the same `clusterId` share the topology cache.
+
+2. **bgdId**: Used by `BlueGreenStatusProvider` to store and retrieve BG switchover status. The provider is keyed by `bgdId`.
+
+3. **Relationship**: When `BlueGreenConnectionPlugin` initializes, it gets `clusterId` from `HostListProvider` and creates a `BlueGreenStatusProvider` keyed by `bgdId`. The provider uses `clusterId` for monitor reset events.
+
 ## Log Levels
 
 | JUL Level | Log4j2 Level | Description |
