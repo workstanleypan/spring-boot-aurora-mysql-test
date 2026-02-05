@@ -506,19 +506,30 @@ delete_all() {
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Step 1: Deleting Blue/Green deployments..."
-    BG_IDS=$(aws rds describe-blue-green-deployments \
-        --query "BlueGreenDeployments[?contains(BlueGreenDeploymentName, \`$STACK_NAME\`)].BlueGreenDeploymentIdentifier" \
+    
+    # Get BG deployments with their status
+    BG_INFO=$(aws rds describe-blue-green-deployments \
+        --query "BlueGreenDeployments[?contains(BlueGreenDeploymentName, \`$STACK_NAME\`)].[BlueGreenDeploymentIdentifier,Status]" \
         --output text \
         --region "$REGION" 2>/dev/null || echo "")
     
-    if [ -n "$BG_IDS" ] && [ "$BG_IDS" != "None" ]; then
-        for BG_ID in $BG_IDS; do
-            echo "  Deleting: $BG_ID"
-            aws rds delete-blue-green-deployment \
-                --blue-green-deployment-identifier "$BG_ID" \
-                --delete-target \
-                --region "$REGION" 2>/dev/null || true
-        done
+    if [ -n "$BG_INFO" ] && [ "$BG_INFO" != "None" ]; then
+        while read -r BG_ID BG_STATUS; do
+            [ -z "$BG_ID" ] && continue
+            echo "  Deleting: $BG_ID (status: $BG_STATUS)"
+            
+            # For SWITCHOVER_COMPLETED status, don't use --delete-target
+            if [ "$BG_STATUS" = "SWITCHOVER_COMPLETED" ]; then
+                aws rds delete-blue-green-deployment \
+                    --blue-green-deployment-identifier "$BG_ID" \
+                    --region "$REGION" 2>/dev/null || true
+            else
+                aws rds delete-blue-green-deployment \
+                    --blue-green-deployment-identifier "$BG_ID" \
+                    --delete-target \
+                    --region "$REGION" 2>/dev/null || true
+            fi
+        done <<< "$BG_INFO"
         
         echo "  Waiting for Blue/Green deployments to be deleted..."
         local max_wait=300  # 5 minutes max
