@@ -280,14 +280,17 @@ init_db() {
 
     SQL_FILE="$SCRIPT_DIR/init-database.sql"
     
-    # Initialize all clusters in the stack
+    # Initialize all clusters in the stack by querying RDS directly
     local success_count=0
     local fail_count=0
     
     for i in $(seq 1 3); do
-        ENDPOINT=$(aws cloudformation describe-stacks \
-            --stack-name "$STACK_NAME" \
-            --query "Stacks[0].Outputs[?OutputKey=='Cluster${i}Endpoint'].OutputValue" \
+        CLUSTER_ID="${STACK_NAME}-cluster-$i"
+        
+        # Get endpoint directly from RDS (more reliable than CloudFormation outputs)
+        ENDPOINT=$(aws rds describe-db-clusters \
+            --db-cluster-identifier "$CLUSTER_ID" \
+            --query 'DBClusters[0].Endpoint' \
             --output text \
             --region "$REGION" 2>/dev/null)
 
