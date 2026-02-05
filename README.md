@@ -2,6 +2,10 @@
 
 Spring Boot application for testing AWS JDBC Wrapper with Aurora MySQL, supporting Blue/Green Deployment automatic switchover testing.
 
+> 📖 **Blue/Green Deployment Runbook**: For comprehensive guidance on using AWS JDBC Wrapper with Blue/Green deployments, see:
+> - [AWS JDBC Wrapper Blue/Green Runbook (English)](docs/AWS_JDBC_WRAPPER_BLUEGREEN_RUNBOOK.md)
+> - [AWS JDBC Wrapper Blue/Green Runbook (中文)](docs/AWS_JDBC_WRAPPER_BLUEGREEN_RUNBOOK_CN.md)
+
 ## Features
 
 - AWS Advanced JDBC Wrapper 3.2.0
