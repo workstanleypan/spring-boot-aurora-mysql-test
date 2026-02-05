@@ -2,6 +2,8 @@
 <Configuration status="WARN" monitorInterval="30">
     <Properties>
         <Property name="LOG_PATH">logs</Property>
+        <!-- 启动时间戳，每次启动生成新文件 -->
+        <Property name="STARTUP_TIME">$${date:yyyyMMdd-HHmmss}</Property>
         <Property name="LOG_PATTERN">%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n</Property>
         <Property name="LOG_PATTERN_CONSOLE">%d{HH:mm:ss.SSS} [%t] %highlight{%-5level} %style{%logger{36}}{cyan} - %msg%n</Property>
     </Properties>
@@ -12,38 +14,21 @@
             <PatternLayout pattern="${LOG_PATTERN_CONSOLE}" disableAnsi="false"/>
         </Console>
 
-        <!-- Rolling File - All logs -->
-        <RollingFile name="RollingFile" fileName="${LOG_PATH}/spring-boot.log"
-                     filePattern="${LOG_PATH}/spring-boot-%d{yyyy-MM-dd}-%i.log.gz">
+        <!-- File - All logs (每次启动新文件) -->
+        <File name="AppFile" fileName="${LOG_PATH}/spring-boot-${STARTUP_TIME}.log" append="false">
             <PatternLayout pattern="${LOG_PATTERN}"/>
-            <Policies>
-                <SizeBasedTriggeringPolicy size="50MB"/>
-                <TimeBasedTriggeringPolicy interval="1"/>
-            </Policies>
-            <DefaultRolloverStrategy max="10"/>
-        </RollingFile>
+        </File>
 
-        <!-- Rolling File - AWS JDBC Wrapper logs -->
-        <RollingFile name="WrapperFile" fileName="${LOG_PATH}/wrapper.log"
-                     filePattern="${LOG_PATH}/wrapper-%d{yyyy-MM-dd}-%i.log.gz">
+        <!-- File - AWS JDBC Wrapper logs (每次启动新文件) -->
+        <File name="WrapperFile" fileName="${LOG_PATH}/wrapper-${STARTUP_TIME}.log" append="false">
             <PatternLayout pattern="${LOG_PATTERN}"/>
-            <Policies>
-                <SizeBasedTriggeringPolicy size="50MB"/>
-                <TimeBasedTriggeringPolicy interval="1"/>
-            </Policies>
-            <DefaultRolloverStrategy max="10"/>
-        </RollingFile>
+        </File>
 
-        <!-- Rolling File - Error logs -->
-        <RollingFile name="ErrorFile" fileName="${LOG_PATH}/error.log"
-                     filePattern="${LOG_PATH}/error-%d{yyyy-MM-dd}-%i.log.gz">
+        <!-- File - Error logs (每次启动新文件) -->
+        <File name="ErrorFile" fileName="${LOG_PATH}/error-${STARTUP_TIME}.log" append="false">
             <PatternLayout pattern="${LOG_PATTERN}"/>
             <ThresholdFilter level="ERROR" onMatch="ACCEPT" onMismatch="DENY"/>
-            <Policies>
-                <SizeBasedTriggeringPolicy size="50MB"/>
-            </Policies>
-            <DefaultRolloverStrategy max="5"/>
-        </RollingFile>
+        </File>
     </Appenders>
 
     <Loggers>
@@ -53,31 +38,31 @@
         <Logger name="software.amazon.jdbc" level="TRACE" additivity="false">
             <AppenderRef ref="Console"/>
             <AppenderRef ref="WrapperFile"/>
-            <AppenderRef ref="RollingFile"/>
+            <AppenderRef ref="AppFile"/>
         </Logger>
 
         <!-- HikariCP -->
         <Logger name="com.zaxxer.hikari" level="INFO" additivity="false">
             <AppenderRef ref="Console"/>
-            <AppenderRef ref="RollingFile"/>
+            <AppenderRef ref="AppFile"/>
         </Logger>
 
         <!-- Application -->
         <Logger name="com.test" level="DEBUG" additivity="false">
             <AppenderRef ref="Console"/>
-            <AppenderRef ref="RollingFile"/>
+            <AppenderRef ref="AppFile"/>
         </Logger>
 
         <!-- Spring Framework -->
         <Logger name="org.springframework" level="INFO" additivity="false">
             <AppenderRef ref="Console"/>
-            <AppenderRef ref="RollingFile"/>
+            <AppenderRef ref="AppFile"/>
         </Logger>
 
         <!-- Root Logger -->
         <Root level="INFO">
             <AppenderRef ref="Console"/>
-            <AppenderRef ref="RollingFile"/>
+            <AppenderRef ref="AppFile"/>
             <AppenderRef ref="ErrorFile"/>
         </Root>
     </Loggers>
