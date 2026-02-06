@@ -578,7 +578,7 @@ grep -i "error\|exception\|failed" logs/wrapper-*.log | head -50
    - Watch for BG status changes in real-time
 
 2. **Expect Brief Suspension**
-   - SQL requests are suspended during IN_PROGRESS phase (typically 30-60 seconds)
+   - SQL requests are suspended during IN_PROGRESS phase (typically only 2-3 seconds based on testing)
 
 3. **Don't Panic on Errors**
    - Some connection errors are expected during transition

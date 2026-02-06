@@ -578,7 +578,7 @@ grep -i "error\|exception\|failed" logs/wrapper-*.log | head -50
    - 实时观察 BG 状态变化
 
 2. **预期短暂暂停**
-   - IN_PROGRESS 阶段 SQL 请求暂停（通常 30-60 秒）
+   - IN_PROGRESS 阶段 SQL 请求暂停（根据测试通常只有 2-3 秒）
 
 3. **不要对错误恐慌**
    - 过渡期间一些连接错误是预期的
