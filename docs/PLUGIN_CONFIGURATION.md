@@ -119,11 +119,14 @@ spring:
   datasource:
     hikari:
       pool-name: AuroraHikariPool
-      minimum-idle: 10
-      maximum-pool-size: 50
+      minimum-idle: 20
+      maximum-pool-size: 120
       idle-timeout: 300000
       max-lifetime: 600000
-      connection-timeout: 30000
+      connection-timeout: 10000
+      validation-timeout: 5000
+      connection-test-query: SELECT 1
+      leak-detection-threshold: 0
 ```
 
 ## Verify Plugins
