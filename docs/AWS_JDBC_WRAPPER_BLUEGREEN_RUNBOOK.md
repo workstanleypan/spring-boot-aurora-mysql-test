@@ -53,9 +53,9 @@ The AWS Advanced JDBC Wrapper's `bg` plugin actively manages database connection
 
 ### Software Requirements
 
-- Java 17+
+- Java 11+ or 17+ (depending on Spring Boot version; see [build.sh](../build.sh) for version combos)
 - AWS Advanced JDBC Wrapper 3.2.0+ (recommend using the [latest release](https://github.com/aws/aws-advanced-jdbc-wrapper/releases))
-- Spring Boot 3.x (recommended) or compatible framework
+- Spring Boot 2.7.x or 3.x (configurable via `build.sh`)
 - MySQL client (for database initialization)
 - AWS CLI (for CloudFormation deployment)
 
@@ -280,6 +280,12 @@ props.setProperty("blue-green-monitoring-socketTimeout", "10000");
 
 3. **Deploy Application with BG Plugin**
    ```bash
+   # Build (default: Spring Boot 3.4.2, JDK 17, Wrapper 3.2.0)
+   ./build.sh
+   # Or custom versions:
+   # ./build.sh --sb 2.7.18 --jdk 11
+   # ./build.sh --sb 3.2.0 --jdk 17 --wrapper 3.1.0
+
    export WRAPPER_LOG_LEVEL="FINE"
    ./run-aurora.sh prod
    ```
@@ -350,6 +356,50 @@ props.setProperty("blue-green-monitoring-socketTimeout", "10000");
 
 ## Testing Procedures
 
+### Single Instance
+
+```bash
+# Build and start
+./build.sh
+export AURORA_CLUSTER_ENDPOINT="cluster.cluster-xxx.rds.amazonaws.com"
+export AURORA_PASSWORD="password"
+export WRAPPER_LOG_LEVEL="FINE"
+./run-aurora.sh prod
+```
+
+### Multi-Instance (Same Cluster - Scenario A)
+
+```bash
+export AURORA_CLUSTER_ENDPOINT="cluster.cluster-xxx.rds.amazonaws.com"
+export AURORA_USERNAME="admin"
+export AURORA_PASSWORD="password"
+
+# Terminal 1
+./run-instance1.sh   # port 8080, TABLE_PREFIX=inst1, CLUSTER_ID=cluster-a
+
+# Terminal 2
+./run-instance2.sh   # port 8081, TABLE_PREFIX=inst2, CLUSTER_ID=cluster-a
+```
+
+### Multi-Instance (Different Clusters - Scenario B)
+
+```bash
+# Per-instance endpoints and credentials
+export AURORA_CLUSTER_ENDPOINT_1="cluster-a.cluster-xxx.rds.amazonaws.com"
+export AURORA_USERNAME_1="user_a"
+export AURORA_PASSWORD_1="pass_a"
+
+export AURORA_CLUSTER_ENDPOINT_2="cluster-b.cluster-yyy.rds.amazonaws.com"
+export AURORA_USERNAME_2="user_b"
+export AURORA_PASSWORD_2="pass_b"
+
+# Terminal 1
+./run-instance1.sh   # port 8080, CLUSTER_ID=cluster-a
+
+# Terminal 2
+./run-instance2.sh   # port 8081, CLUSTER_ID=cluster-b
+```
+
 ### Start Continuous Write Test
 
 ```bash
@@ -414,7 +464,11 @@ curl -X POST http://localhost:8080/api/bluegreen/stop
 
 ```bash
 # View current logs (new file per startup)
+# Single instance:
 tail -f logs/wrapper-*.log
+# Multi-instance:
+tail -f logs/instance1/wrapper-*.log
+tail -f logs/instance2/wrapper-*.log
 
 # BG status changes (FINE level)
 grep -i "BG status" logs/wrapper-*.log
@@ -613,7 +667,7 @@ grep -i "error\|exception\|failed" logs/wrapper-*.log | head -50
 ### Environment Variables
 
 ```bash
-# Required
+# Required (single instance or shared fallback)
 export AURORA_CLUSTER_ENDPOINT="cluster.cluster-xxx.rds.amazonaws.com"
 export AURORA_DATABASE="testdb"
 export AURORA_USERNAME="admin"
@@ -624,7 +678,15 @@ export WRAPPER_LOG_LEVEL="FINE"
 export CLUSTER_ID="cluster-a"
 export BGD_ID="cluster-a"
 
-# Optional (defaults shown)
+# Per-instance overrides (Scenario B - different clusters)
+export AURORA_CLUSTER_ENDPOINT_1="cluster-a.cluster-xxx.rds.amazonaws.com"
+export AURORA_USERNAME_1="user_a"
+export AURORA_PASSWORD_1="pass_a"
+export AURORA_CLUSTER_ENDPOINT_2="cluster-b.cluster-yyy.rds.amazonaws.com"
+export AURORA_USERNAME_2="user_b"
+export AURORA_PASSWORD_2="pass_b"
+
+# Optional BG plugin parameters (defaults shown)
 export BG_HIGH_MS="100"
 export BG_INCREASED_MS="1000"
 export BG_BASELINE_MS="60000"
@@ -635,11 +697,22 @@ export BG_SWITCHOVER_TIMEOUT_MS="180000"
 ### Common Commands
 
 ```bash
-# Start application
+# Build with custom versions
+./build.sh                              # Default: SB 3.4.2, JDK 17
+./build.sh --sb 2.7.18 --jdk 11        # Spring Boot 2.x + JDK 11
+./build.sh --list                       # Show version combos
+
+# Start application (single instance)
 ./run-aurora.sh prod
+
+# Start multi-instance
+./run-instance1.sh    # port 8080
+./run-instance2.sh    # port 8081
 
 # Start write test
 curl -X POST "http://localhost:8080/api/bluegreen/start-write?numConnections=10&writeIntervalMs=500"
+# Multi-instance: also trigger port 8081
+curl -X POST "http://localhost:8081/api/bluegreen/start-write?numConnections=10&writeIntervalMs=500"
 
 # Check status
 curl http://localhost:8080/api/bluegreen/status
@@ -649,6 +722,8 @@ curl -X POST http://localhost:8080/api/bluegreen/stop
 
 # View BG status
 grep -i "BG status" logs/wrapper-*.log
+# Multi-instance:
+grep -i "BG status" logs/instance1/wrapper-*.log
 
 # View switchover summary
 grep -i "time offset" logs/wrapper-*.log -A 14

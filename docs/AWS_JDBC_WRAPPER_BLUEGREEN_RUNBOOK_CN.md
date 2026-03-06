@@ -53,9 +53,9 @@ AWS Advanced JDBC Wrapper 的 `bg` 插件在 Blue/Green 切换期间主动管理
 
 ### 软件要求
 
-- Java 17+
+- Java 11+ 或 17+（取决于 Spring Boot 版本；参见 [build.sh](../build.sh) 了解版本组合）
 - AWS Advanced JDBC Wrapper 3.2.0+（推荐使用[最新版本](https://github.com/aws/aws-advanced-jdbc-wrapper/releases)）
-- Spring Boot 3.x（推荐）或兼容框架
+- Spring Boot 2.7.x 或 3.x（可通过 `build.sh` 配置）
 - MySQL 客户端（用于数据库初始化）
 - AWS CLI（用于 CloudFormation 部署）
 
@@ -280,6 +280,12 @@ props.setProperty("blue-green-monitoring-socketTimeout", "10000");
 
 3. **部署带 BG 插件的应用**
    ```bash
+   # 构建（默认：Spring Boot 3.4.2, JDK 17, Wrapper 3.2.0）
+   ./build.sh
+   # 或自定义版本：
+   # ./build.sh --sb 2.7.18 --jdk 11
+   # ./build.sh --sb 3.2.0 --jdk 17 --wrapper 3.1.0
+
    export WRAPPER_LOG_LEVEL="FINE"
    ./run-aurora.sh prod
    ```
@@ -350,6 +356,50 @@ props.setProperty("blue-green-monitoring-socketTimeout", "10000");
 
 ## 测试流程
 
+### 单实例
+
+```bash
+# 构建并启动
+./build.sh
+export AURORA_CLUSTER_ENDPOINT="cluster.cluster-xxx.rds.amazonaws.com"
+export AURORA_PASSWORD="password"
+export WRAPPER_LOG_LEVEL="FINE"
+./run-aurora.sh prod
+```
+
+### 多实例（同一集群 - 场景 A）
+
+```bash
+export AURORA_CLUSTER_ENDPOINT="cluster.cluster-xxx.rds.amazonaws.com"
+export AURORA_USERNAME="admin"
+export AURORA_PASSWORD="password"
+
+# 终端 1
+./run-instance1.sh   # 端口 8080，TABLE_PREFIX=inst1，CLUSTER_ID=cluster-a
+
+# 终端 2
+./run-instance2.sh   # 端口 8081，TABLE_PREFIX=inst2，CLUSTER_ID=cluster-a
+```
+
+### 多实例（不同集群 - 场景 B）
+
+```bash
+# 每个实例独立的 endpoint 和凭证
+export AURORA_CLUSTER_ENDPOINT_1="cluster-a.cluster-xxx.rds.amazonaws.com"
+export AURORA_USERNAME_1="user_a"
+export AURORA_PASSWORD_1="pass_a"
+
+export AURORA_CLUSTER_ENDPOINT_2="cluster-b.cluster-yyy.rds.amazonaws.com"
+export AURORA_USERNAME_2="user_b"
+export AURORA_PASSWORD_2="pass_b"
+
+# 终端 1
+./run-instance1.sh   # 端口 8080，CLUSTER_ID=cluster-a
+
+# 终端 2
+./run-instance2.sh   # 端口 8081，CLUSTER_ID=cluster-b
+```
+
 ### 启动持续写入测试
 
 ```bash
@@ -414,7 +464,11 @@ curl -X POST http://localhost:8080/api/bluegreen/stop
 
 ```bash
 # 查看当前日志（每次启动新文件）
+# 单实例：
 tail -f logs/wrapper-*.log
+# 多实例：
+tail -f logs/instance1/wrapper-*.log
+tail -f logs/instance2/wrapper-*.log
 
 # BG 状态变化（FINE 级别）
 grep -i "BG status" logs/wrapper-*.log
@@ -613,7 +667,7 @@ grep -i "error\|exception\|failed" logs/wrapper-*.log | head -50
 ### 环境变量
 
 ```bash
-# 必需
+# 必需（单实例或共享 fallback）
 export AURORA_CLUSTER_ENDPOINT="cluster.cluster-xxx.rds.amazonaws.com"
 export AURORA_DATABASE="testdb"
 export AURORA_USERNAME="admin"
@@ -624,7 +678,15 @@ export WRAPPER_LOG_LEVEL="FINE"
 export CLUSTER_ID="cluster-a"
 export BGD_ID="cluster-a"
 
-# 可选（显示默认值）
+# 每个实例独立覆盖（场景 B - 不同集群）
+export AURORA_CLUSTER_ENDPOINT_1="cluster-a.cluster-xxx.rds.amazonaws.com"
+export AURORA_USERNAME_1="user_a"
+export AURORA_PASSWORD_1="pass_a"
+export AURORA_CLUSTER_ENDPOINT_2="cluster-b.cluster-yyy.rds.amazonaws.com"
+export AURORA_USERNAME_2="user_b"
+export AURORA_PASSWORD_2="pass_b"
+
+# 可选 BG 插件参数（显示默认值）
 export BG_HIGH_MS="100"
 export BG_INCREASED_MS="1000"
 export BG_BASELINE_MS="60000"
@@ -635,11 +697,22 @@ export BG_SWITCHOVER_TIMEOUT_MS="180000"
 ### 常用命令
 
 ```bash
-# 启动应用
+# 自定义版本构建
+./build.sh                              # 默认：SB 3.4.2, JDK 17
+./build.sh --sb 2.7.18 --jdk 11        # Spring Boot 2.x + JDK 11
+./build.sh --list                       # 查看版本组合
+
+# 启动应用（单实例）
 ./run-aurora.sh prod
+
+# 启动多实例
+./run-instance1.sh    # 端口 8080
+./run-instance2.sh    # 端口 8081
 
 # 启动写入测试
 curl -X POST "http://localhost:8080/api/bluegreen/start-write?numConnections=10&writeIntervalMs=500"
+# 多实例：同时触发端口 8081
+curl -X POST "http://localhost:8081/api/bluegreen/start-write?numConnections=10&writeIntervalMs=500"
 
 # 检查状态
 curl http://localhost:8080/api/bluegreen/status
@@ -649,6 +722,8 @@ curl -X POST http://localhost:8080/api/bluegreen/stop
 
 # 查看 BG 状态
 grep -i "BG status" logs/wrapper-*.log
+# 多实例：
+grep -i "BG status" logs/instance1/wrapper-*.log
 
 # 查看切换摘要
 grep -i "time offset" logs/wrapper-*.log -A 14
