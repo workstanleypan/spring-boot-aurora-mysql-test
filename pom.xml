@@ -13,17 +13,31 @@
     <name>Spring Boot Aurora MySQL Test</name>
     <description>Spring Boot test with AWS Aurora MySQL and JDBC Wrapper</description>
 
-    <parent>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.4.2</version>
-        <relativePath/>
-    </parent>
+    <!-- No parent - use BOM import instead for version flexibility -->
 
     <properties>
+        <!-- ============================================================ -->
+        <!-- Configurable versions - override via: mvn -Dspring-boot.version=3.2.0 -->
+        <!-- ============================================================ -->
+        <spring-boot.version>3.4.2</spring-boot.version>
         <java.version>17</java.version>
+        <aws-jdbc-wrapper.version>3.2.0</aws-jdbc-wrapper.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.source>${java.version}</maven.compiler.source>
+        <maven.compiler.target>${java.version}</maven.compiler.target>
     </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>${spring-boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
         <!-- Spring Boot Starter Web (exclude Logback) -->
@@ -66,7 +80,7 @@
         <dependency>
             <groupId>software.amazon.jdbc</groupId>
             <artifactId>aws-advanced-jdbc-wrapper</artifactId>
-            <version>3.2.0</version>
+            <version>${aws-jdbc-wrapper.version}</version>
         </dependency>
 
         <!-- Spring Boot Actuator -->
@@ -91,10 +105,30 @@
     </dependencies>
 
     <build>
+        <!-- JAR name includes version combo for easy identification -->
+        <finalName>${project.artifactId}-sb${spring-boot.version}-jdk${java.version}-wrapper${aws-jdbc-wrapper.version}</finalName>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.11.0</version>
+                <configuration>
+                    <source>${java.version}</source>
+                    <target>${java.version}</target>
+                    <parameters>true</parameters>
+                </configuration>
+            </plugin>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <version>${spring-boot.version}</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
                 <configuration>
                     <excludes>
                         <exclude>

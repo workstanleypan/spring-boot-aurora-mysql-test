@@ -107,7 +107,7 @@ echo "🚀 Starting Spring Boot application..."
 echo ""
 
 # Start application
-JAR_FILE=$(ls -t target/*.jar 2>/dev/null | head -1)
+JAR_FILE=${JAR_FILE:-$(ls -t target/*.jar 2>/dev/null | head -1)}
 
 if [ -z "$JAR_FILE" ]; then
     echo "❌ Error: No JAR file found in target/"
@@ -119,6 +119,11 @@ if [ -z "$JAR_FILE" ]; then
 fi
 
 echo "📦 Using JAR: $JAR_FILE"
+echo ""
+
+# Auto-detect JAVA_HOME from JAR filename
+source "$(dirname "$0")/detect-java.sh"
+detect_java_from_jar "$JAR_FILE"
 echo ""
 
 # Archive old logs before starting
@@ -137,4 +142,4 @@ if [ -d "$LOG_DIR" ]; then
 fi
 
 # Start application
-java -jar "$JAR_FILE" --spring.profiles.active="$PROFILE"
+$JAVA_CMD -jar "$JAR_FILE" --spring.profiles.active="$PROFILE"

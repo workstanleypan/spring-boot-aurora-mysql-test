@@ -44,7 +44,11 @@ management:
 
 # Server configuration
 server:
-  port: 8080
+  port: ${SERVER_PORT:8080}
+
+# Table prefix for multi-instance testing (avoids table name conflicts)
+app:
+  table-prefix: ${TABLE_PREFIX:default}
 
 ---
 # Aurora MySQL production environment

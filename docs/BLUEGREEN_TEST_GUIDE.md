@@ -6,15 +6,67 @@ Test AWS JDBC Wrapper behavior during Aurora Blue/Green switchover. Uses HikariC
 
 ## Quick Start
 
-### 1. Start Application
+### 0. Build
 
 ```bash
-AURORA_CLUSTER_ENDPOINT="your-cluster.cluster-xxxxx.us-east-1.rds.amazonaws.com" \
-AURORA_DATABASE="testdb" \
-AURORA_USERNAME="admin" \
-AURORA_PASSWORD="your-password" \
-WRAPPER_LOG_LEVEL="FINE" \
+# Default build (Spring Boot 3.4.2, JDK 17, Wrapper 3.2.0)
+./build.sh
+
+# Custom versions
+./build.sh --sb 2.7.18 --jdk 11
+./build.sh --sb 3.2.0 --jdk 17 --wrapper 3.1.0
+
+# Show all version combos
+./build.sh --list
+```
+
+### 1. Start Application
+
+**Single instance:**
+
+```bash
+export AURORA_CLUSTER_ENDPOINT="your-cluster.cluster-xxxxx.us-east-1.rds.amazonaws.com"
+export AURORA_DATABASE="testdb"
+export AURORA_USERNAME="admin"
+export AURORA_PASSWORD="your-password"
+export WRAPPER_LOG_LEVEL="FINE"
+
 ./run-aurora.sh prod
+```
+
+**Multi-instance (Scenario A - same cluster, different tables):**
+
+```bash
+# Both instances share the same cluster, same credentials
+export AURORA_CLUSTER_ENDPOINT="your-cluster.cluster-xxx.rds.amazonaws.com"
+export AURORA_USERNAME="admin"
+export AURORA_PASSWORD="your-password"
+
+# Terminal 1
+./run-instance1.sh   # port 8080, TABLE_PREFIX=inst1, CLUSTER_ID=cluster-a
+
+# Terminal 2
+./run-instance2.sh   # port 8081, TABLE_PREFIX=inst2, CLUSTER_ID=cluster-a
+```
+
+**Multi-instance (Scenario B - different clusters, different credentials):**
+
+```bash
+# Instance 1 - Cluster A
+export AURORA_CLUSTER_ENDPOINT_1="cluster-a.cluster-xxx.rds.amazonaws.com"
+export AURORA_USERNAME_1="user_a"
+export AURORA_PASSWORD_1="pass_a"
+
+# Instance 2 - Cluster B
+export AURORA_CLUSTER_ENDPOINT_2="cluster-b.cluster-yyy.rds.amazonaws.com"
+export AURORA_USERNAME_2="user_b"
+export AURORA_PASSWORD_2="pass_b"
+
+# Terminal 1
+./run-instance1.sh   # port 8080, CLUSTER_ID=cluster-a
+
+# Terminal 2
+./run-instance2.sh   # port 8081, CLUSTER_ID=cluster-b
 ```
 
 ### 2. Start Test
@@ -23,11 +75,17 @@ WRAPPER_LOG_LEVEL="FINE" \
 # Continuous write test - 10 connections, write every 500ms
 curl -X POST "http://localhost:8080/api/bluegreen/start-write?numConnections=10&writeIntervalMs=500"
 
+# For multi-instance: trigger both ports
+curl -X POST "http://localhost:8080/api/bluegreen/start-write?numConnections=10&writeIntervalMs=500"
+curl -X POST "http://localhost:8081/api/bluegreen/start-write?numConnections=10&writeIntervalMs=500"
+
 # Check status
 curl http://localhost:8080/api/bluegreen/status
+curl http://localhost:8081/api/bluegreen/status
 
 # Stop test
 curl -X POST http://localhost:8080/api/bluegreen/stop
+curl -X POST http://localhost:8081/api/bluegreen/stop
 ```
 
 ### 3. Execute Blue/Green Switchover
@@ -77,51 +135,64 @@ curl -X POST http://localhost:8080/api/bluegreen/start \
 | `durationSeconds` | 3600 | Duration in seconds (0=continuous) |
 | `enableWrites` | true | Enable write operations |
 
-## Tech Stack
+## Environment Variables
 
-### Connection Pool: HikariCP
+### Shared (all instances)
 
-```yaml
-spring:
-  datasource:
-    hikari:
-      pool-name: AuroraHikariPool
-      minimum-idle: 10
-      maximum-pool-size: 50
-      connection-timeout: 30000
-```
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `AURORA_CLUSTER_ENDPOINT` | Yes* | - | Cluster endpoint (fallback for all instances) |
+| `AURORA_USERNAME` | Yes* | admin | Username (fallback for all instances) |
+| `AURORA_PASSWORD` | Yes* | - | Password (fallback for all instances) |
+| `AURORA_DATABASE` | No | testdb | Database name |
+| `WRAPPER_LOG_LEVEL` | No | INFO | SEVERE\|WARNING\|INFO\|FINE\|FINER\|FINEST |
 
-### JDBC Wrapper Plugins
+### Per-instance (override shared values)
 
-```
-wrapperPlugins=initialConnection,auroraConnectionTracker,failover2,efm2,bg
-```
+| Variable | Used by | Fallback |
+|----------|---------|----------|
+| `AURORA_CLUSTER_ENDPOINT_1` | run-instance1.sh | `AURORA_CLUSTER_ENDPOINT` |
+| `AURORA_USERNAME_1` | run-instance1.sh | `AURORA_USERNAME` |
+| `AURORA_PASSWORD_1` | run-instance1.sh | `AURORA_PASSWORD` |
+| `AURORA_DATABASE_1` | run-instance1.sh | `AURORA_DATABASE` |
+| `CLUSTER_ID_1` | run-instance1.sh | `CLUSTER_ID` → `cluster-a` |
+| `BGD_ID_1` | run-instance1.sh | `BGD_ID` → `cluster-a` |
+| `AURORA_CLUSTER_ENDPOINT_2` | run-instance2.sh | `AURORA_CLUSTER_ENDPOINT` |
+| `AURORA_USERNAME_2` | run-instance2.sh | `AURORA_USERNAME` |
+| `AURORA_PASSWORD_2` | run-instance2.sh | `AURORA_PASSWORD` |
+| `AURORA_DATABASE_2` | run-instance2.sh | `AURORA_DATABASE` |
+| `CLUSTER_ID_2` | run-instance2.sh | `cluster-b` (when `_2` endpoint is set) |
+| `BGD_ID_2` | run-instance2.sh | `cluster-b` (when `_2` endpoint is set) |
 
 ## View Logs
 
-每次启动应用会生成新的日志文件（带时间戳），旧日志自动归档到 `logs/archive/`。
+Each instance writes logs to its own directory:
+
+| Instance | Log directory |
+|----------|--------------|
+| Single (`run-aurora.sh`) | `logs/` |
+| Instance 1 (`run-instance1.sh`) | `logs/instance1/` |
+| Instance 2 (`run-instance2.sh`) | `logs/instance2/` |
 
 ```bash
-# 当前测试的 Wrapper 日志
+# Single instance logs
 tail -f logs/wrapper-*.log
 
-# 当前测试的应用日志
-tail -f logs/spring-boot-*.log
+# Multi-instance logs
+tail -f logs/instance1/wrapper-*.log
+tail -f logs/instance2/wrapper-*.log
 
-# BG Plugin 相关
-grep -i "blue.*green\|BlueGreen" logs/wrapper-*.log
+# BG Plugin related
+grep -i "blue.*green\|BlueGreen" logs/instance1/wrapper-*.log
 
-# Failover 相关
-grep -i "failover" logs/wrapper-*.log
-
-# 查看历史日志
-ls logs/archive/
+# Failover related
+grep -i "failover" logs/instance1/wrapper-*.log
 ```
 
 ### Analyze Switchover Results
 
 ```bash
-# View switchover timeline summary (FINE level and above)
+# View switchover timeline summary
 grep -i "time offset" logs/wrapper-*.log -A 14
 
 # Check BG status changes (FINE level)
@@ -157,19 +228,10 @@ grep -i "Status changed to" logs/wrapper-*.log
 
 For non-admin database users, ensure proper permissions are granted on **BOTH** blue and green clusters before switchover:
 
-**Aurora MySQL:**
 ```sql
 GRANT SELECT ON mysql.rds_topology TO 'your_user'@'%';
 FLUSH PRIVILEGES;
 ```
-
-**RDS PostgreSQL:**
-```sql
-GRANT USAGE ON SCHEMA rds_tools TO your_user;
-GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA rds_tools TO your_user;
-```
-
-If permissions are not granted, the BG plugin cannot access metadata and switchover may fail.
 
 ### High Failure Rate
 1. Check database connection stability
@@ -180,12 +242,6 @@ If permissions are not granted, the BG plugin cannot access metadata and switcho
 1. Confirm using Cluster Endpoint
 2. Verify BG Plugin is enabled
 3. Check log level setting (recommend FINE)
-
-### Connection Exceptions
-```bash
-grep -A 20 "Exception" logs/spring-boot.log
-grep "HikariPool" logs/spring-boot.log
-```
 
 ## Related Documentation
 

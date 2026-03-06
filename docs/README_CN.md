@@ -4,16 +4,18 @@ Spring Boot 应用，用于测试 AWS JDBC Wrapper 连接 Aurora MySQL，支持 
 
 ## 功能特性
 
-- AWS Advanced JDBC Wrapper 3.2.0
+- AWS Advanced JDBC Wrapper（可配置版本，默认 3.2.0）
 - Blue/Green Deployment Plugin 支持
 - Failover & EFM Plugin
 - HikariCP 连接池
 - 多线程持续写入测试
-- Spring Boot 3.4.2
+- Spring Boot（可配置版本，默认 3.4.2）
+- 可配置 JDK 版本（Spring Boot 2.x 用 JDK 11，Spring Boot 3.x 用 JDK 17+）
+- 多实例测试支持（同集群 / 不同集群）
 
 ## 环境要求
 
-- Java 17+
+- Java 11+ 或 17+（取决于 Spring Boot 版本）
 - Maven 3.6+
 - AWS CLI（用于 CloudFormation 部署）
 - Aurora MySQL 集群访问权限
@@ -26,65 +28,66 @@ Spring Boot 应用，用于测试 AWS JDBC Wrapper 连接 Aurora MySQL，支持 
 ### 1. 克隆并编译
 
 ```bash
-# 克隆仓库
 git clone https://github.com/workstanleypan/spring-boot-aurora-mysql-test.git
 cd spring-boot-aurora-mysql-test
 
-# 编译（跳过测试）
-mvn clean package -DskipTests
+# 默认构建（Spring Boot 3.4.2, JDK 17, Wrapper 3.2.0）
+./build.sh
 
-# 或者带测试编译（需要数据库连接）
-mvn clean package
+# 自定义版本构建
+./build.sh --sb 2.7.18 --jdk 11                    # Spring Boot 2.x + JDK 11
+./build.sh --sb 3.2.0 --jdk 17 --wrapper 3.1.0     # 完全自定义
+
+# 或者直接用 Maven（使用 pom.xml 中的默认版本）
+mvn clean package -DskipTests
 ```
 
 ### 2. 部署 Aurora 集群（可选）
 
-如果没有 Aurora 集群，可以使用 CloudFormation 创建：
-
 ```bash
 cd cloudformation
 
-# 一键部署（推荐）：部署集群 + 初始化数据库 + 创建蓝绿部署
+# 一键部署（推荐）
 DB_PASSWORD=YourPassword123 ./deploy.sh deploy-all
 
 # 或者分步执行：
 DB_PASSWORD=YourPassword123 ./deploy.sh deploy    # 创建集群（约 15 分钟）
 ./deploy.sh init-db                               # 初始化数据库
 ./deploy.sh create-bluegreen                      # 创建蓝绿部署（约 20-30 分钟）
-
-# 其他命令
-./deploy.sh status               # 查看状态
-./deploy.sh outputs              # 获取连接信息
-./deploy.sh list                 # 列出所有 stacks
-./deploy.sh delete               # 删除所有资源
 ```
 
 ### 3. 配置并运行
 
+**单 service 单 cluster（标准用法）：**
+
 ```bash
-# 必需的环境变量
 export AURORA_CLUSTER_ENDPOINT="your-cluster.cluster-xxxxx.us-east-1.rds.amazonaws.com"
 export AURORA_DATABASE="testdb"
 export AURORA_USERNAME="admin"
 export AURORA_PASSWORD="your-password"
+export WRAPPER_LOG_LEVEL="FINE"
 
-# 可选：日志和集群标识
-export WRAPPER_LOG_LEVEL="FINE"    # SEVERE|WARNING|INFO|FINE|FINER|FINEST
-export CLUSTER_ID="cluster-a"      # 多集群场景下每个集群必须唯一
-export BGD_ID="cluster-a"          # 多集群场景下每个集群必须唯一
-
-# 可选：Blue/Green 插件调优（详见 PLUGIN_CONFIGURATION.md）
-export BG_HIGH_MS="100"            # IN_PROGRESS 阶段轮询间隔（毫秒）
-export BG_INCREASED_MS="1000"      # CREATED 阶段轮询间隔（毫秒）
-export BG_BASELINE_MS="60000"      # 正常运行时轮询间隔（毫秒）
-export BG_CONNECT_TIMEOUT_MS="30000"      # 切换期间连接超时（毫秒）
-export BG_SWITCHOVER_TIMEOUT_MS="180000"  # 切换总超时（毫秒）
-
-# 运行应用
 ./run-aurora.sh prod
+```
 
-# 或者使用 Maven 直接运行
-mvn spring-boot:run -Dspring-boot.run.profiles=aurora-prod
+> 注意：`TABLE_PREFIX` 默认值为 `"default"`，测试表名为 `default_bg_write_test`、`default_bg_test_thread_N`，功能不受影响。
+
+**多实例测试（详见下方[多实例蓝绿测试](#多实例蓝绿测试)）：**
+
+```bash
+# 场景 A：两个 service 连接同一个 cluster，不同表
+./run-instance1.sh   # 端口 8080，TABLE_PREFIX=inst1，CLUSTER_ID=cluster-a
+./run-instance2.sh   # 端口 8081，TABLE_PREFIX=inst2，CLUSTER_ID=cluster-a（共享 topology 缓存）
+
+# 场景 B：两个 service 分别连接不同的 cluster
+export AURORA_CLUSTER_ENDPOINT_1="cluster-a.cluster-xxx.rds.amazonaws.com"
+export AURORA_USERNAME_1="user_a"
+export AURORA_PASSWORD_1="pass_a"
+export AURORA_CLUSTER_ENDPOINT_2="cluster-b.cluster-yyy.rds.amazonaws.com"
+export AURORA_USERNAME_2="user_b"
+export AURORA_PASSWORD_2="pass_b"
+./run-instance1.sh   # 端口 8080，CLUSTER_ID=cluster-a
+./run-instance2.sh   # 端口 8081，CLUSTER_ID=cluster-b（独立 topology 缓存）
 ```
 
 > 📖 **配置详情**:
@@ -98,27 +101,105 @@ mvn spring-boot:run -Dspring-boot.run.profiles=aurora-prod
 # 启动持续写入测试 - 10个连接，每500ms写入一次
 curl -X POST "http://localhost:8080/api/bluegreen/start-write?numConnections=10&writeIntervalMs=500"
 
+# 多实例时分别触发两个端口
+curl -X POST "http://localhost:8080/api/bluegreen/start-write?numConnections=10&writeIntervalMs=500"
+curl -X POST "http://localhost:8081/api/bluegreen/start-write?numConnections=10&writeIntervalMs=500"
+
 # 查看状态
 curl http://localhost:8080/api/bluegreen/status
+curl http://localhost:8081/api/bluegreen/status
 
 # 停止测试
 curl -X POST http://localhost:8080/api/bluegreen/stop
+curl -X POST http://localhost:8081/api/bluegreen/stop
+```
+
+### 5. 查看日志
+
+每个实例的日志写入独立目录：
+
+| 实例 | 日志目录 |
+|------|----------|
+| 单实例 (`run-aurora.sh`) | `logs/` |
+| 实例 1 (`run-instance1.sh`) | `logs/instance1/` |
+| 实例 2 (`run-instance2.sh`) | `logs/instance2/` |
+
+```bash
+# 单实例日志
+tail -f logs/wrapper-*.log
+
+# 多实例日志
+tail -f logs/instance1/wrapper-*.log
+tail -f logs/instance2/wrapper-*.log
 ```
 
 ## 编译选项
 
+### 自定义版本构建（build.sh）
+
+`build.sh` 脚本支持任意组合 Spring Boot、JDK 和 JDBC Wrapper 版本进行构建。自动处理 JDK 兼容性检查和 JAVA_HOME 检测。
+
 ```bash
-# 标准编译（跳过测试）
-mvn clean package -DskipTests
+# 查看帮助
+./build.sh --help
 
-# 使用特定 profile 编译
-mvn clean package -P production
+# 查看常用版本组合
+./build.sh --list
 
-# 构建 Docker 镜像（如果有 Dockerfile）
-docker build -t aurora-mysql-test .
+# 默认构建
+./build.sh
 
-# 直接运行 JAR
-java -jar target/spring-boot-aurora-mysql-test-1.0.0.jar --spring.profiles.active=aurora-prod
+# Spring Boot 2.7.x + JDK 11
+./build.sh --sb 2.7.18 --jdk 11
+
+# Spring Boot 3.2.x + JDK 17
+./build.sh --sb 3.2.0 --jdk 17
+
+# 完全自定义（Spring Boot + JDK + Wrapper）
+./build.sh --sb 3.4.2 --jdk 17 --wrapper 3.1.0
+```
+
+JAR 文件名包含版本组合信息，便于识别：
+```
+target/spring-boot-aurora-mysql-test-sb3.4.2-jdk17-wrapper3.2.0.jar
+target/spring-boot-aurora-mysql-test-sb2.7.18-jdk11-wrapper3.2.0.jar
+```
+
+**版本兼容性规则：**
+| Spring Boot | JDK | 说明 |
+|-------------|-----|------|
+| 2.7.x | 8, 11, 17 | 最后的 2.x 版本 |
+| 3.0.x - 3.2.x | 17+ | Jakarta EE 迁移 |
+| 3.3.x - 3.4.x | 17, 21 | 最新版本 |
+
+### 运行时自动检测 JDK
+
+所有启动脚本（`run-aurora.sh`、`run-instance1.sh`、`run-instance2.sh`）会自动从 JAR 文件名中检测 JDK 版本，并使用对应的 JAVA_HOME 运行。例如，用 `--jdk 11` 构建的 JAR 会自动用 JDK 11 运行。
+
+```bash
+# 用 JDK 11 构建
+./build.sh --sb 2.7.18 --jdk 11
+
+# 运行 - 自动使用 JDK 11（从 JAR 文件名检测）
+./run-aurora.sh prod
+
+# 或者显式指定 JAR
+JAR_FILE=target/spring-boot-aurora-mysql-test-sb2.7.18-jdk11-wrapper3.2.0.jar ./run-aurora.sh prod
+```
+
+### 直接使用 Maven 构建
+
+也可以通过 Maven 属性直接覆盖版本：
+
+```bash
+# 覆盖 Spring Boot 版本
+mvn clean package -DskipTests -Dspring-boot.version=3.2.0
+
+# 覆盖所有版本
+mvn clean package -DskipTests \
+    -Dspring-boot.version=2.7.18 \
+    -Djava.version=11 \
+    -Daws-jdbc-wrapper.version=3.2.0
 ```
 
 ## API 端点
@@ -148,13 +229,30 @@ curl -X POST "http://localhost:8080/api/bluegreen/start-write?numConnections=20&
 
 ### 环境变量
 
-| 变量 | 必需 | 说明 |
-|------|------|------|
-| `AURORA_CLUSTER_ENDPOINT` | 是 | Aurora 集群端点 |
-| `AURORA_DATABASE` | 是 | 数据库名称 |
-| `AURORA_USERNAME` | 是 | 数据库用户名 |
-| `AURORA_PASSWORD` | 是 | 数据库密码 |
-| `WRAPPER_LOG_LEVEL` | 否 | 日志级别（默认: INFO） |
+| 变量 | 必需 | 默认值 | 说明 |
+|------|------|--------|------|
+| `AURORA_CLUSTER_ENDPOINT` | 是 | - | Aurora 集群端点（所有实例的 fallback） |
+| `AURORA_DATABASE` | 否 | testdb | 数据库名称 |
+| `AURORA_USERNAME` | 是 | admin | 数据库用户名 |
+| `AURORA_PASSWORD` | 是 | - | 数据库密码 |
+| `WRAPPER_LOG_LEVEL` | 否 | INFO | 日志级别（SEVERE\|WARNING\|INFO\|FINE\|FINER\|FINEST） |
+| `CLUSTER_ID` | 否 | cluster-a | 集群拓扑缓存标识符（多集群时每个集群必须唯一） |
+| `BGD_ID` | 否 | cluster-a | Blue/Green 部署状态标识符（多集群时每个集群必须唯一） |
+| `SERVER_PORT` | 否 | 8080 | HTTP 服务端口（多实例时使用不同端口） |
+| `TABLE_PREFIX` | 否 | default | 测试表名前缀（同一 cluster 多实例时用于隔离表名） |
+
+每个实例可独立覆盖（用于 `run-instance1.sh` / `run-instance2.sh`）：
+
+| 变量 | 使用者 | Fallback |
+|------|--------|----------|
+| `AURORA_CLUSTER_ENDPOINT_1` | 实例 1 | `AURORA_CLUSTER_ENDPOINT` |
+| `AURORA_USERNAME_1` | 实例 1 | `AURORA_USERNAME` |
+| `AURORA_PASSWORD_1` | 实例 1 | `AURORA_PASSWORD` |
+| `AURORA_DATABASE_1` | 实例 1 | `AURORA_DATABASE` |
+| `AURORA_CLUSTER_ENDPOINT_2` | 实例 2 | `AURORA_CLUSTER_ENDPOINT` |
+| `AURORA_USERNAME_2` | 实例 2 | `AURORA_USERNAME` |
+| `AURORA_PASSWORD_2` | 实例 2 | `AURORA_PASSWORD` |
+| `AURORA_DATABASE_2` | 实例 2 | `AURORA_DATABASE` |
 
 ### 应用 Profile
 
@@ -255,11 +353,69 @@ spring-boot-aurora-mysql-test/
 │   ├── AURORA_QUICK_START.md
 │   ├── BLUEGREEN_TEST_GUIDE.md
 │   └── PLUGIN_CONFIGURATION.md
-├── run-aurora.sh
+├── build.sh               # 自定义版本构建脚本（Spring Boot / JDK / Wrapper）
+├── detect-java.sh         # 运行时自动检测 JAVA_HOME（被启动脚本引用）
+├── run-aurora.sh          # 单实例启动脚本
+├── run-instance1.sh       # 多实例：实例 1（端口 8080）
+├── run-instance2.sh       # 多实例：实例 2（端口 8081，场景 A 或 B）
 ├── run-rds.sh
-├── pom.xml
+├── pom.xml                # 版本参数化（spring-boot.version, java.version, aws-jdbc-wrapper.version）
 └── README.md
 ```
+
+## 多实例蓝绿测试
+
+### 场景 A：同一台机器，两个 service 连接同一个 Aurora cluster 的不同表
+
+两个实例连接同一个 Aurora cluster，共享相同的 `clusterId`/`bgdId`（共享 topology 缓存），因此两个实例会同时感知到同一个蓝绿切换事件。通过 `TABLE_PREFIX` 隔离测试表名。
+
+```bash
+# 终端 1
+export AURORA_CLUSTER_ENDPOINT="your-cluster.cluster-xxx.rds.amazonaws.com"
+export AURORA_PASSWORD="your-password"
+./run-instance1.sh   # 端口 8080，TABLE_PREFIX=inst1，CLUSTER_ID=cluster-a
+
+# 终端 2（相同的 cluster endpoint）
+export AURORA_CLUSTER_ENDPOINT="your-cluster.cluster-xxx.rds.amazonaws.com"
+export AURORA_PASSWORD="your-password"
+./run-instance2.sh   # 端口 8081，TABLE_PREFIX=inst2，CLUSTER_ID=cluster-a
+```
+
+预期行为：两个实例同时检测到切换事件，各自独立恢复连接。
+
+### 场景 B：同一台机器，两个 service 分别连接两个不同的 Aurora cluster
+
+每个实例连接不同的 Aurora cluster，各自有独立的蓝绿部署。使用不同的 `clusterId`/`bgdId` 确保 topology 缓存和 BG 状态完全隔离。每个实例可以使用独立的用户名和密码。
+
+```bash
+# 设置每个实例的 endpoint 和凭证
+export AURORA_CLUSTER_ENDPOINT_1="cluster-a.cluster-xxx.rds.amazonaws.com"
+export AURORA_USERNAME_1="user_a"
+export AURORA_PASSWORD_1="pass_a"
+
+export AURORA_CLUSTER_ENDPOINT_2="cluster-b.cluster-yyy.rds.amazonaws.com"
+export AURORA_USERNAME_2="user_b"
+export AURORA_PASSWORD_2="pass_b"
+
+# 终端 1
+./run-instance1.sh   # 端口 8080，使用 _1 变量，CLUSTER_ID=cluster-a
+
+# 终端 2
+./run-instance2.sh   # 端口 8081，使用 _2 变量，CLUSTER_ID=cluster-b
+```
+
+预期行为：每个实例独立追踪各自 cluster 的切换事件，cluster-b 的切换不影响实例 1。
+
+### clusterId 和 bgdId 对多实例的影响
+
+| 配置 | 效果 |
+|------|------|
+| 相同 `clusterId` | 实例共享 topology 缓存 — 同一 cluster 时正确 |
+| 不同 `clusterId` | 实例有独立的 topology 缓存 — 不同 cluster 时必须如此 |
+| 相同 `bgdId` | 实例共享 BG 切换状态 — 同一 cluster 时正确 |
+| 不同 `bgdId` | 实例有独立的 BG 状态 — 不同 cluster 时必须如此 |
+
+如果连接**不同** cluster 的两个实例使用了相同的 `clusterId`/`bgdId`，topology 信息和 BG 状态会互相覆盖，导致连接路由错误。
 
 ## 文档
 

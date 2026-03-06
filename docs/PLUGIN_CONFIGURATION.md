@@ -65,6 +65,17 @@ datasource-b:
        bgdId=cluster-b
 ```
 
+### Multi-Instance Scenario
+
+The same rules apply when running **multiple JVM processes** (e.g., two Spring Boot instances on the same machine):
+
+| Scenario | clusterId / bgdId | Behavior |
+|----------|-------------------|----------|
+| Both instances → same cluster | Same values | Shared topology cache. Both detect the same switchover event. Use different `TABLE_PREFIX` to avoid table conflicts. |
+| Each instance → different cluster | Different values | Isolated topology caches and BG states. Each instance tracks its own cluster independently. |
+
+Use `run-instance1.sh` / `run-instance2.sh` for multi-instance testing. See README for full usage.
+
 ### What Happens If Not Configured Correctly?
 
 | Scenario | Problem |

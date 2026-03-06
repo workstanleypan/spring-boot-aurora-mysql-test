@@ -12,16 +12,18 @@ Spring Boot application for testing AWS JDBC Wrapper with Aurora MySQL, supporti
 
 ## Features
 
-- AWS Advanced JDBC Wrapper 3.2.0
+- AWS Advanced JDBC Wrapper (configurable version, default 3.2.0)
 - Blue/Green Deployment Plugin Support
 - Failover & EFM Plugin
 - HikariCP Connection Pool
 - Multi-threaded Continuous Write Testing
-- Spring Boot 3.4.2
+- Spring Boot (configurable version, default 3.4.2)
+- Configurable JDK version (11 for Spring Boot 2.x, 17+ for Spring Boot 3.x)
+- Multi-instance testing support (same cluster / different clusters)
 
 ## Prerequisites
 
-- Java 17+
+- Java 11+ or 17+ (depending on Spring Boot version)
 - Maven 3.6+
 - AWS CLI (for CloudFormation deployment)
 - Access to Aurora MySQL cluster
@@ -34,65 +36,66 @@ Spring Boot application for testing AWS JDBC Wrapper with Aurora MySQL, supporti
 ### 1. Clone and Build
 
 ```bash
-# Clone repository
 git clone https://github.com/workstanleypan/spring-boot-aurora-mysql-test.git
 cd spring-boot-aurora-mysql-test
 
-# Build
-mvn clean package -DskipTests
+# Default build (Spring Boot 3.4.2, JDK 17, Wrapper 3.2.0)
+./build.sh
 
-# Or build with tests (requires database connection)
-mvn clean package
+# Or with custom versions
+./build.sh --sb 2.7.18 --jdk 11                    # Spring Boot 2.x + JDK 11
+./build.sh --sb 3.2.0 --jdk 17 --wrapper 3.1.0     # Full custom
+
+# Or plain Maven (uses default versions from pom.xml)
+mvn clean package -DskipTests
 ```
 
 ### 2. Deploy Aurora Cluster (Optional)
 
-If you don't have an Aurora cluster, use CloudFormation to create one:
-
 ```bash
 cd cloudformation
 
-# One-click deployment (recommended): deploy + init-db + create-bluegreen
+# One-click deployment (recommended)
 DB_PASSWORD=YourPassword123 ./deploy.sh deploy-all
 
 # Or step-by-step:
 DB_PASSWORD=YourPassword123 ./deploy.sh deploy    # Create cluster (~15 min)
 ./deploy.sh init-db                               # Initialize database
 ./deploy.sh create-bluegreen                      # Create Blue/Green (~20-30 min)
-
-# Other commands
-./deploy.sh status               # Show status
-./deploy.sh outputs              # Get connection info
-./deploy.sh list                 # List all stacks
-./deploy.sh delete               # Delete everything
 ```
 
 ### 3. Configure and Run
 
+**Single service, single cluster (standard usage):**
+
 ```bash
-# Required environment variables
 export AURORA_CLUSTER_ENDPOINT="your-cluster.cluster-xxxxx.us-east-1.rds.amazonaws.com"
 export AURORA_DATABASE="testdb"
 export AURORA_USERNAME="admin"
 export AURORA_PASSWORD="your-password"
+export WRAPPER_LOG_LEVEL="FINE"
 
-# Optional: Logging and cluster identification
-export WRAPPER_LOG_LEVEL="FINE"    # SEVERE|WARNING|INFO|FINE|FINER|FINEST
-export CLUSTER_ID="cluster-a"      # Unique per cluster (multi-cluster scenarios)
-export BGD_ID="cluster-a"          # Unique per cluster (multi-cluster scenarios)
-
-# Optional: Blue/Green plugin tuning (see docs/PLUGIN_CONFIGURATION.md for details)
-export BG_HIGH_MS="100"            # Polling interval during IN_PROGRESS (ms)
-export BG_INCREASED_MS="1000"      # Polling interval during CREATED (ms)
-export BG_BASELINE_MS="60000"      # Polling interval during normal operation (ms)
-export BG_CONNECT_TIMEOUT_MS="30000"      # Connection timeout during switchover (ms)
-export BG_SWITCHOVER_TIMEOUT_MS="180000"  # Total switchover timeout (ms)
-
-# Run application
 ./run-aurora.sh prod
+```
 
-# Or run directly with Maven
-mvn spring-boot:run -Dspring-boot.run.profiles=aurora-prod
+> Note: `TABLE_PREFIX` defaults to `"default"`, so test tables will be named `default_bg_write_test`, `default_bg_test_thread_N`. This has no functional impact.
+
+**Multi-instance testing (see [Multi-Instance Test Guide](#multi-instance-blue-green-testing) below):**
+
+```bash
+# Scenario A: Two services, same cluster, different tables
+./run-instance1.sh   # port 8080, TABLE_PREFIX=inst1, CLUSTER_ID=cluster-a
+./run-instance2.sh   # port 8081, TABLE_PREFIX=inst2, CLUSTER_ID=cluster-a (shared topology cache)
+
+# Scenario B: Two services, different clusters
+export AURORA_CLUSTER_ENDPOINT_1="cluster-a.cluster-xxx.rds.amazonaws.com"
+export AURORA_USERNAME_1="user_a"
+export AURORA_PASSWORD_1="pass_a"
+export AURORA_CLUSTER_ENDPOINT_2="cluster-b.cluster-yyy.rds.amazonaws.com"
+export AURORA_USERNAME_2="user_b"
+export AURORA_PASSWORD_2="pass_b"
+./run-instance1.sh   # port 8080, CLUSTER_ID=cluster-a
+./run-instance2.sh   # port 8081, CLUSTER_ID=cluster-b (isolated topology cache)
 ```
 
 > 📖 **Configuration Details**:
@@ -115,10 +118,8 @@ curl -X POST http://localhost:8080/api/bluegreen/stop
 
 ### 5. Analyze Switchover Logs
 
-After a Blue/Green switchover, check the wrapper logs:
-
 ```bash
-# View switchover timeline summary (FINE level and above)
+# View switchover timeline summary
 grep -i "time offset" logs/wrapper.log -A 14
 
 # Check BG status changes (FINE level)
@@ -130,18 +131,71 @@ grep -i "Status changed to" logs/wrapper.log
 
 ## Build Options
 
+### Custom Version Build (build.sh)
+
+The `build.sh` script allows you to build with any combination of Spring Boot, JDK, and JDBC Wrapper versions. It automatically handles JDK compatibility checks and JAVA_HOME detection.
+
 ```bash
-# Standard build (skip tests)
-mvn clean package -DskipTests
+# Show help
+./build.sh --help
 
-# Build with specific profile
-mvn clean package -P production
+# Show common version combinations
+./build.sh --list
 
-# Build Docker image (if Dockerfile exists)
-docker build -t aurora-mysql-test .
+# Default build
+./build.sh
 
-# Run JAR directly
-java -jar target/spring-boot-aurora-mysql-test-1.0.0.jar --spring.profiles.active=aurora-prod
+# Spring Boot 2.7.x + JDK 11
+./build.sh --sb 2.7.18 --jdk 11
+
+# Spring Boot 3.2.x + JDK 17
+./build.sh --sb 3.2.0 --jdk 17
+
+# Full custom (Spring Boot + JDK + Wrapper)
+./build.sh --sb 3.4.2 --jdk 17 --wrapper 3.1.0
+```
+
+The JAR filename includes the version combination for easy identification:
+```
+target/spring-boot-aurora-mysql-test-sb3.4.2-jdk17-wrapper3.2.0.jar
+target/spring-boot-aurora-mysql-test-sb2.7.18-jdk11-wrapper3.2.0.jar
+```
+
+**Version compatibility rules:**
+| Spring Boot | JDK | Notes |
+|-------------|-----|-------|
+| 2.7.x | 8, 11, 17 | Last 2.x release |
+| 3.0.x - 3.2.x | 17+ | Jakarta EE migration |
+| 3.3.x - 3.4.x | 17, 21 | Latest |
+
+### Auto JDK Detection at Runtime
+
+All run scripts (`run-aurora.sh`, `run-instance1.sh`, `run-instance2.sh`) automatically detect the JDK version from the JAR filename and use the matching JAVA_HOME. For example, a JAR built with `--jdk 11` will automatically run with JDK 11.
+
+```bash
+# Build with JDK 11
+./build.sh --sb 2.7.18 --jdk 11
+
+# Run - automatically uses JDK 11 (detected from JAR name)
+./run-aurora.sh prod
+
+# Or specify JAR explicitly
+JAR_FILE=target/spring-boot-aurora-mysql-test-sb2.7.18-jdk11-wrapper3.2.0.jar ./run-aurora.sh prod
+```
+
+### Plain Maven Build
+
+You can also override versions directly via Maven properties:
+
+```bash
+# Override Spring Boot version
+mvn clean package -DskipTests -Dspring-boot.version=3.2.0
+
+# Override all versions
+mvn clean package -DskipTests \
+    -Dspring-boot.version=2.7.18 \
+    -Djava.version=11 \
+    -Daws-jdbc-wrapper.version=3.2.0
 ```
 
 ## API Endpoints
@@ -173,13 +227,28 @@ curl -X POST "http://localhost:8080/api/bluegreen/start-write?numConnections=20&
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `AURORA_CLUSTER_ENDPOINT` | Yes | - | Aurora cluster endpoint |
-| `AURORA_DATABASE` | Yes | - | Database name |
-| `AURORA_USERNAME` | Yes | - | Database username |
+| `AURORA_CLUSTER_ENDPOINT` | Yes | - | Aurora cluster endpoint (fallback for all instances) |
+| `AURORA_DATABASE` | No | testdb | Database name |
+| `AURORA_USERNAME` | Yes | admin | Database username |
 | `AURORA_PASSWORD` | Yes | - | Database password |
 | `WRAPPER_LOG_LEVEL` | No | INFO | Log level (SEVERE\|WARNING\|INFO\|FINE\|FINER\|FINEST) |
 | `CLUSTER_ID` | No | cluster-a | Cluster topology cache identifier (must be unique per cluster) |
 | `BGD_ID` | No | cluster-a | Blue/Green deployment identifier (must be unique per cluster) |
+| `SERVER_PORT` | No | 8080 | HTTP server port (use different ports for multi-instance) |
+| `TABLE_PREFIX` | No | default | Table name prefix (use different values for multi-instance on same cluster) |
+
+Per-instance overrides (used by `run-instance1.sh` / `run-instance2.sh`):
+
+| Variable | Used by | Fallback |
+|----------|---------|----------|
+| `AURORA_CLUSTER_ENDPOINT_1` | Instance 1 | `AURORA_CLUSTER_ENDPOINT` |
+| `AURORA_USERNAME_1` | Instance 1 | `AURORA_USERNAME` |
+| `AURORA_PASSWORD_1` | Instance 1 | `AURORA_PASSWORD` |
+| `AURORA_DATABASE_1` | Instance 1 | `AURORA_DATABASE` |
+| `AURORA_CLUSTER_ENDPOINT_2` | Instance 2 | `AURORA_CLUSTER_ENDPOINT` |
+| `AURORA_USERNAME_2` | Instance 2 | `AURORA_USERNAME` |
+| `AURORA_PASSWORD_2` | Instance 2 | `AURORA_PASSWORD` |
+| `AURORA_DATABASE_2` | Instance 2 | `AURORA_DATABASE` |
 
 ### Blue/Green Plugin Parameters
 
@@ -307,11 +376,69 @@ spring-boot-aurora-mysql-test/
 │   ├── AURORA_QUICK_START.md
 │   ├── BLUEGREEN_TEST_GUIDE.md
 │   └── PLUGIN_CONFIGURATION.md
-├── run-aurora.sh
+├── build.sh               # Build with custom Spring Boot / JDK / Wrapper versions
+├── detect-java.sh         # Auto-detect JAVA_HOME from JAR filename (sourced by run scripts)
+├── run-aurora.sh          # Single service startup script
+├── run-instance1.sh       # Multi-instance: Instance 1 (port 8080)
+├── run-instance2.sh       # Multi-instance: Instance 2 (port 8081, Scenario A or B)
 ├── run-rds.sh
-├── pom.xml
+├── pom.xml                # Parameterized versions (spring-boot.version, java.version, aws-jdbc-wrapper.version)
 └── README.md
 ```
+
+## Multi-Instance Blue/Green Testing
+
+### Scenario A: Two services on same cluster, different tables
+
+Both instances connect to the same Aurora cluster. They share the same `clusterId`/`bgdId` (shared topology cache), so both detect the same Blue/Green switchover event simultaneously. Table names are isolated via `TABLE_PREFIX`.
+
+```bash
+# Terminal 1
+export AURORA_CLUSTER_ENDPOINT="your-cluster.cluster-xxx.rds.amazonaws.com"
+export AURORA_PASSWORD="your-password"
+./run-instance1.sh   # port 8080, TABLE_PREFIX=inst1, CLUSTER_ID=cluster-a
+
+# Terminal 2 (same cluster endpoint)
+export AURORA_CLUSTER_ENDPOINT="your-cluster.cluster-xxx.rds.amazonaws.com"
+export AURORA_PASSWORD="your-password"
+./run-instance2.sh   # port 8081, TABLE_PREFIX=inst2, CLUSTER_ID=cluster-a
+```
+
+Expected behavior: Both instances detect the switchover at the same time and recover independently.
+
+### Scenario B: Two services on different clusters
+
+Each instance connects to a different Aurora cluster with its own Blue/Green deployment. They use different `clusterId`/`bgdId` to keep topology caches and BG states fully isolated. Each instance can use its own credentials.
+
+```bash
+# Set per-instance endpoints and credentials
+export AURORA_CLUSTER_ENDPOINT_1="cluster-a.cluster-xxx.rds.amazonaws.com"
+export AURORA_USERNAME_1="user_a"
+export AURORA_PASSWORD_1="pass_a"
+
+export AURORA_CLUSTER_ENDPOINT_2="cluster-b.cluster-yyy.rds.amazonaws.com"
+export AURORA_USERNAME_2="user_b"
+export AURORA_PASSWORD_2="pass_b"
+
+# Terminal 1
+./run-instance1.sh   # port 8080, uses _1 vars, CLUSTER_ID=cluster-a
+
+# Terminal 2
+./run-instance2.sh   # port 8081, uses _2 vars, CLUSTER_ID=cluster-b
+```
+
+Expected behavior: Each instance tracks its own cluster's switchover independently. A switchover on cluster-b has no effect on instance 1.
+
+### Why clusterId and bgdId matter for multi-instance
+
+| Config | Effect |
+|--------|--------|
+| Same `clusterId` | Instances share topology cache — correct for same cluster |
+| Different `clusterId` | Instances have isolated topology caches — required for different clusters |
+| Same `bgdId` | Instances share BG switchover state — correct for same cluster |
+| Different `bgdId` | Instances have isolated BG states — required for different clusters |
+
+If two instances connecting to **different** clusters share the same `clusterId`/`bgdId`, topology info and BG states will overwrite each other, causing incorrect connection routing.
 
 ## Documentation
 

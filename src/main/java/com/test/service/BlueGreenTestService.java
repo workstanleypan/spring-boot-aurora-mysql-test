@@ -3,6 +3,7 @@ package com.test.service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import javax.sql.DataSource;
@@ -37,6 +38,9 @@ public class BlueGreenTestService {
     
     @Autowired
     private DataSource dataSource;
+    
+    @Value("${app.table-prefix:default}")
+    private String tablePrefix;
     
     // Test statistics
     private final AtomicLong totalMetadataReads = new AtomicLong(0);
@@ -283,7 +287,7 @@ public String startWriteOnlyTest(int numConnections, int writeIntervalMs) {
         log.info("✍️  [{}] Write-Thread-{}: Starting continuous writes...", now(), threadId);
         
         Connection conn = null;
-        String tableName = "bg_write_test";
+        String tableName = tablePrefix + "_bg_write_test";
         
         long writeCount = 0;
         long lastReportTime = System.currentTimeMillis();
@@ -698,7 +702,7 @@ public String startWriteOnlyTest(int numConnections, int writeIntervalMs) {
         }
         
         Connection conn = null;
-        String tableName = "bg_test_thread_" + threadId;
+        String tableName = tablePrefix + "_bg_test_thread_" + threadId;
         
         try {
             // Get connection from pool

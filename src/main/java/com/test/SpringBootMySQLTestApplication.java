@@ -60,7 +60,8 @@ public class SpringBootMySQLTestApplication {
     }
     
     @EventListener(ApplicationReadyEvent.class)
-    public void onApplicationReady() {
+    public void onApplicationReady(ApplicationReadyEvent event) {
+        String port = event.getApplicationContext().getEnvironment().getProperty("local.server.port", "8080");
         log.info("");
         log.info("╔════════════════════════════════════════════════════════════════╗");
         log.info("║              Application Ready                                 ║");
@@ -68,9 +69,9 @@ public class SpringBootMySQLTestApplication {
         log.info("");
         log.info("✅ Application is ready!");
         log.info("📋 Access endpoints:");
-        log.info("   - Health: http://localhost:8080/actuator/health");
-        log.info("   - Blue/Green Status: http://localhost:8080/api/bluegreen/status");
-        log.info("   - Continuous Test: http://localhost:8080/api/bluegreen/continuous?duration=60");
+        log.info("   - Health: http://localhost:{}/actuator/health", port);
+        log.info("   - Blue/Green Status: http://localhost:{}/api/bluegreen/status", port);
+        log.info("   - Start Write Test: http://localhost:{}/api/bluegreen/start-write?numConnections=10&writeIntervalMs=500", port);
         log.info("");
     }
 }
