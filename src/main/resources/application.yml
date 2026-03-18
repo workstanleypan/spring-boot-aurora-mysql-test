@@ -95,3 +95,30 @@ spring:
     hikari:
       minimum-idle: 5
       maximum-pool-size: 20
+
+---
+# Custom Endpoint with custom domain (e.g. CNAME like "abcd")
+# Requires: customEndpointRegion, clusterInstanceHostPattern, failoverMode
+# Requires: AWS credentials with rds:DescribeDBClusterEndpoints permission
+spring:
+  config:
+    activate:
+      on-profile: custom-endpoint-prod
+  datasource:
+    url: jdbc:aws-wrapper:mysql://${AURORA_CUSTOM_ENDPOINT}:3306/${AURORA_DATABASE:testdb}?wrapperPlugins=initialConnection,auroraConnectionTracker,customEndpoint,failover2,efm2,bg&wrapperLoggerLevel=${WRAPPER_LOG_LEVEL:INFO}&clusterId=${CLUSTER_ID:cluster-a}&bgdId=${BGD_ID:cluster-a}&customEndpointRegion=${CUSTOM_ENDPOINT_REGION}&clusterInstanceHostPattern=${CLUSTER_INSTANCE_HOST_PATTERN}&failoverMode=${FAILOVER_MODE:reader-or-writer}${JDBC_PARAMS:}
+    username: ${AURORA_USERNAME:admin}
+    password: ${AURORA_PASSWORD}
+
+---
+# Custom Endpoint with custom domain - development (verbose logging)
+spring:
+  config:
+    activate:
+      on-profile: custom-endpoint-dev
+  datasource:
+    url: jdbc:aws-wrapper:mysql://${AURORA_CUSTOM_ENDPOINT}:3306/${AURORA_DATABASE:testdb}?wrapperPlugins=initialConnection,auroraConnectionTracker,customEndpoint,failover2,efm2,bg&wrapperLoggerLevel=${WRAPPER_LOG_LEVEL:FINE}&clusterId=${CLUSTER_ID:cluster-a}&bgdId=${BGD_ID:cluster-a}&customEndpointRegion=${CUSTOM_ENDPOINT_REGION}&clusterInstanceHostPattern=${CLUSTER_INSTANCE_HOST_PATTERN}&failoverMode=${FAILOVER_MODE:reader-or-writer}${JDBC_PARAMS:}
+    username: ${AURORA_USERNAME:admin}
+    password: ${AURORA_PASSWORD}
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20

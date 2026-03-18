@@ -488,6 +488,16 @@ Resources:
       Engine: aurora-mysql
       PubliclyAccessible: false
 
+  #============================================================================
+  # Custom Endpoint for Cluster 1 (type ANY, includes all instances)
+  #============================================================================
+  Cluster1CustomEndpoint:
+    Type: AWS::RDS::DBClusterEndpoint
+    Properties:
+      DBClusterIdentifier: !Ref Cluster1
+      DBClusterEndpointIdentifier: !Sub ${EnvironmentName}-cluster-1-custom-ep
+      EndpointType: ANY
+
 Outputs:
   BlueInstanceClass:
     Description: Blue (source) cluster instance class
@@ -504,6 +514,10 @@ Outputs:
   Cluster1ReaderEndpoint:
     Description: Cluster 1 Reader Endpoint
     Value: !GetAtt Cluster1.ReadEndpoint.Address
+
+  Cluster1CustomEndpoint:
+    Description: Cluster 1 Custom Endpoint (type ANY)
+    Value: !GetAtt Cluster1CustomEndpoint.Endpoint
 
   Cluster2Endpoint:
     Condition: CreateCluster2
@@ -538,3 +552,20 @@ Outputs:
       export AURORA_PASSWORD="<your-password>"
       export BLUE_INSTANCE_CLASS="${BlueInstanceClass}"
       export GREEN_INSTANCE_CLASS="${GreenInstanceClass}"
+
+  CustomEndpointEnvConfig:
+    Description: Custom Endpoint environment configuration (set AURORA_CUSTOM_ENDPOINT to your CNAME)
+    Value: !Sub |
+      # Custom Endpoint test configuration
+      # Step 1: Create DNS mapping (e.g. in /etc/hosts):
+      #   <custom-endpoint-ip> abcd
+      # Step 2: Set these environment variables:
+      export AURORA_CUSTOM_ENDPOINT="abcd"
+      export CUSTOM_ENDPOINT_REGION="${AWS::Region}"
+      export CLUSTER_INSTANCE_HOST_PATTERN="?.${AWS::Region}.rds.amazonaws.com"
+      export FAILOVER_MODE="reader-or-writer"
+      export AURORA_DATABASE="${DBName}"
+      export AURORA_USERNAME="${DBUsername}"
+      export AURORA_PASSWORD="<your-password>"
+      # Actual custom endpoint (for DNS mapping reference):
+      # ${Cluster1CustomEndpoint.Endpoint}

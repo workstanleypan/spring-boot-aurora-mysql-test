@@ -69,3 +69,39 @@ jdbc:aws-wrapper:mysql://my-cluster.cluster-xxxxx.us-east-1.rds.amazonaws.com:33
 ```
 jdbc:aws-wrapper:mysql://abcd:3306/testdb?wrapperPlugins=initialConnection,auroraConnectionTracker,customEndpoint,failover2,efm2,bg&clusterId=my-cluster-id&bgdId=my-cluster-id&customEndpointRegion=us-east-1&clusterInstanceHostPattern=?.us-east-1.rds.amazonaws.com&failoverMode=reader-or-writer
 ```
+
+## 快速开始
+
+### 1. 部署基础设施（包含 Custom Endpoint）
+
+```bash
+cd cloudformation
+./deploy.sh
+```
+
+CloudFormation 模板会自动创建一个 type=ANY 的 custom endpoint。
+
+### 2. 配置 DNS 映射
+
+将自定义域名指向实际的 custom endpoint IP：
+
+```bash
+# 查询 custom endpoint 的 IP
+nslookup <custom-endpoint-address-from-cloudformation-output>
+
+# 添加到 /etc/hosts
+echo "<resolved-ip> abcd" | sudo tee -a /etc/hosts
+```
+
+### 3. 设置环境变量并启动
+
+```bash
+source .env
+
+export AURORA_CUSTOM_ENDPOINT="abcd"
+export CUSTOM_ENDPOINT_REGION="us-east-1"
+export CLUSTER_INSTANCE_HOST_PATTERN="?.us-east-1.rds.amazonaws.com"
+export FAILOVER_MODE="reader-or-writer"
+
+./run-custom-endpoint.sh prod
+```
