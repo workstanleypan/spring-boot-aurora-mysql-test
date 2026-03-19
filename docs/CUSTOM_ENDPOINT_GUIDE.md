@@ -4,6 +4,58 @@
 
 官方参考文档：[UsingTheCustomEndpointPlugin.md](https://github.com/aws/aws-advanced-jdbc-wrapper/blob/main/docs/using-the-jdbc-driver/using-plugins/UsingTheCustomEndpointPlugin.md)
 
+## 为什么 Custom Endpoint 需要额外权限
+
+标准 cluster endpoint 和 custom endpoint 的架构差异：
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  标准 Cluster Endpoint 模式（不需要 AWS API）                            │
+│                                                                         │
+│  ┌──────────┐     SQL: SELECT topology     ┌──────────────────────┐    │
+│  │          │  ──────────────────────────>  │   Aurora Cluster     │    │
+│  │   App    │     数据库连接 (port 3306)     │                      │    │
+│  │ + JDBC   │  <──────────────────────────  │  ┌────────┐         │    │
+│  │  Wrapper │     返回拓扑信息               │  │Writer  │         │    │
+│  │          │                               │  ├────────┤         │    │
+│  └──────────┘                               │  │Reader  │         │    │
+│                                             │  ├────────┤         │    │
+│  failover 插件通过 SQL 查询系统表             │  │Reader  │         │    │
+│  获取集群拓扑，完全走数据库连接               │  └────────┘         │    │
+│                                             └──────────────────────┘    │
+└─────────────────────────────────────────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│  Custom Endpoint 模式（需要 AWS API + 数据库连接）                       │
+│                                                                         │
+│                                             ┌──────────────────────┐    │
+│                 ② AWS API (HTTPS)           │  AWS RDS 控制面       │    │
+│              DescribeDBClusterEndpoints      │                      │    │
+│  ┌──────────┐  ─────────────────────────>   │  "my-custom-ep 包含:  │    │
+│  │          │                               │   instance-1          │    │
+│  │   App    │  <─────────────────────────   │   instance-2"         │    │
+│  │ + JDBC   │    返回 endpoint 成员列表      └──────────────────────┘    │
+│  │  Wrapper │                                                           │
+│  │          │                               ┌──────────────────────┐    │
+│  │          │   ① 数据库连接 (port 3306)     │   Aurora Cluster     │    │
+│  │          │  ──────────────────────────>  │                      │    │
+│  │          │                               │  ┌────────┐         │    │
+│  └──────────┘                               │  │Writer  │ ← ✓    │    │
+│                                             │  ├────────┤         │    │
+│  Custom Endpoint Plugin 需要知道             │  │Reader  │ ← ✓    │    │
+│  "哪些实例属于这个 custom endpoint"           │  ├────────┤         │    │
+│  这个信息只有 RDS 控制面知道                  │  │Reader  │ ← ✗    │    │
+│  → 所以必须调用 AWS API                      │  └────────┘         │    │
+│  → 所以需要 AWS 凭证 + IAM 权限              └──────────────────────┘    │
+└─────────────────────────────────────────────────────────────────────────┘
+
+  ✓ = 属于 custom endpoint 的实例（failover 只在这些实例间切换）
+  ✗ = 不属于 custom endpoint 的实例（不会被选中）
+```
+
+简单说：custom endpoint 的成员信息是 RDS 控制面的元数据，无法通过 SQL 查询获取，所以插件必须调用 AWS API，这就引入了对 AWS 凭证和 IAM 权限的依赖。
+
 ## 额外的 Maven 依赖
 
 Custom Endpoint Plugin 需要 AWS Java SDK RDS（v2.7.x or later）作为运行时依赖：
