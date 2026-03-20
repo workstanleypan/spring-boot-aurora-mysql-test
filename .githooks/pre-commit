@@ -1,0 +1,54 @@
+#!/bin/bash
+# Pre-commit hook: scan for potential PII/sensitive information
+# Install: git config core.hooksPath .githooks
+
+RED='\033[0;31m'
+NC='\033[0m'
+
+# Patterns to check (add customer-specific patterns as needed)
+PATTERNS=(
+    '[0-9]\{12\}'                          # AWS Account IDs (12 digits)
+    'AKIA[0-9A-Z]\{16\}'                   # AWS Access Key IDs
+    '[a-zA-Z0-9+/]\{40\}'                  # Potential AWS Secret Keys
+    'password\s*=\s*[^$"][^"]*"'           # Hardcoded passwords
+)
+
+# Configurable sensitive keywords file
+KEYWORDS_FILE=".githooks/sensitive-keywords.txt"
+
+FOUND=0
+
+# Check patterns in staged files
+for file in $(git diff --cached --name-only --diff-filter=ACM); do
+    # Skip binary files and this hook itself
+    [[ "$file" == *.jar ]] || [[ "$file" == *.png ]] || [[ "$file" == *.githooks/* ]] && continue
+
+    # Check regex patterns
+    for pattern in "${PATTERNS[@]}"; do
+        if git diff --cached -- "$file" | grep -q "+.*$pattern"; then
+            echo -e "${RED}⚠️  Potential sensitive data in $file matching pattern: $pattern${NC}"
+            FOUND=1
+        fi
+    done
+
+    # Check sensitive keywords from file
+    if [ -f "$KEYWORDS_FILE" ]; then
+        while IFS= read -r keyword || [ -n "$keyword" ]; do
+            [[ -z "$keyword" ]] || [[ "$keyword" == \#* ]] && continue
+            if git diff --cached -- "$file" | grep -qi "+.*$keyword"; then
+                echo -e "${RED}⚠️  Sensitive keyword '$keyword' found in $file${NC}"
+                FOUND=1
+            fi
+        done < "$KEYWORDS_FILE"
+    fi
+done
+
+if [ $FOUND -ne 0 ]; then
+    echo ""
+    echo "❌ Commit blocked: potential sensitive information detected."
+    echo "   Review the files above and replace with generic placeholders."
+    echo "   To bypass (use with caution): git commit --no-verify"
+    exit 1
+fi
+
+exit 0

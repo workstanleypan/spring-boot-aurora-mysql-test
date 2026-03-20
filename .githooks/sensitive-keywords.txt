@@ -1,0 +1,7 @@
+# Sensitive keywords to check before commit
+# Add one keyword per line. Lines starting with # are comments.
+# These are checked case-insensitively against staged file diffs.
+#
+# Example: add customer-specific identifiers here
+# customer-company-name
+# specific-cluster-identifier
